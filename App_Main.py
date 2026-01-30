@@ -12,6 +12,12 @@ from admin import admin_bp
 import csv
 import io
 from datetime import datetime
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill
+    OPENPYXL_AVAILABLE = True
+except Exception:
+    OPENPYXL_AVAILABLE = False
 
 # Initialize Flask application
 App = Flask(__name__)
@@ -356,20 +362,41 @@ def App_Main_Export_CSV():
     for Score_tmp in All_Scores:
         Key = (Score_tmp.Studnt_Id, Score_tmp.Skill_Id)
         Scores_Dict[Key] = Score_tmp
+
+    # Get all notes assigned for this evaluation (per-student)
+    All_Evaluat_Notes = EvaluatNote.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
+    Student_Note_Map = {en.Studnt_Id: en.Note_Id for en in All_Evaluat_Notes}
+
+    # Load notes lookup
+    All_Notes = {n.Id: n for n in Note.query.all()}
+
+    # Load comments for this evaluation and aggregate per-student
+    All_Comments = Comment.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
+    # build skill id -> code map for nicer comment labels
+    SkillCode = {s.Id: s.Code for s in All_Skills}
+    Student_Comments_Map = {}
+    for c in All_Comments:
+        sid = c.Studnt_Id
+        skill_label = SkillCode.get(c.Skill_Id) if c.Skill_Id else 'General'
+        text = (c.Text or '').replace('\n', ' ').replace(';', ',').strip()
+        entry = f"[{skill_label}] {text}"
+        Student_Comments_Map.setdefault(sid, []).append(entry)
     
     # Create CSV in memory
     Output = io.StringIO()
     Writer = csv.writer(Output, delimiter=';')
     
-    # Write header row
-    Header = ['Student', 'Email']
+    # Write header row (include Note and aggregated Comments) - email removed
+    Header = ['Student']
     for Skill_tmp in All_Skills:
         Header.append(f'{Skill_tmp.Code}')
+    Header.append('Note')
+    Header.append('Comments')
     Writer.writerow(Header)
     
     # Write data rows - one row per student
     for Studnt_tmp in All_Studnts:
-        Row = [Studnt_tmp.Name, Studnt_tmp.Email]
+        Row = [Studnt_tmp.Name]
         
         # Add score for each skill
         for Skill_tmp in All_Skills:
@@ -377,12 +404,27 @@ def App_Main_Export_CSV():
             Score_Entry = Scores_Dict.get(Key)
             
             if Score_Entry and Score_Entry.Level:
-                # Write level percentage
-                Row.append(f'{Score_Entry.Level.Percent}%')
+                # Write level description (use Descrip, not percent)
+                Row.append(f'{Score_Entry.Level.Descrip}')
             else:
                 # No level assigned
                 Row.append('')
         
+        # Add Note value (if any)
+        note_val = ''
+        nid = Student_Note_Map.get(Studnt_tmp.Id)
+        if nid:
+            note = All_Notes.get(nid)
+            if note:
+                # Only include the numeric value for exports (no description)
+                note_val = f"{note.Valeure}"
+        Row.append(note_val)
+
+        # Add aggregated comments (joined by ' | ')
+        comments_list = Student_Comments_Map.get(Studnt_tmp.Id, [])
+        comments_cell = ' | '.join(comments_list)
+        Row.append(comments_cell)
+
         Writer.writerow(Row)
     
     # Prepare file for download
@@ -400,6 +442,110 @@ def App_Main_Export_CSV():
         as_attachment=True,
         download_name=Filename
     )
+
+
+@App.route('/export/xlsx')
+def App_Main_Export_XLSX():
+    """Export evaluation data to XLSX with colored cells for levels.
+    Falls back to a 400 error if openpyxl is not installed.
+    """
+    if not OPENPYXL_AVAILABLE:
+        return "openpyxl not installed. Install requirements and restart.", 400
+
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    if evaluat_id:
+        Current_Evaluat = Evaluat.query.get(evaluat_id)
+    else:
+        Current_Evaluat = Evaluat.query.first()
+
+    if not Current_Evaluat:
+        return "No evaluation found", 404
+
+    All_Studnts = Studnt.query.filter_by(Group_Id=Current_Evaluat.Group_Id).order_by(Studnt.Name).all()
+    All_Skills = Skill.query.filter_by(SkillSet_Id=Current_Evaluat.SkillSet_Id).order_by(Skill.Code).all()
+    All_Scores = Score.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
+    Scores_Dict = {(s.Studnt_Id, s.Skill_Id): s for s in All_Scores}
+
+    # Notes and comments mapping (reuse logic from CSV exporter)
+    All_Evaluat_Notes = EvaluatNote.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
+    Student_Note_Map = {en.Studnt_Id: en.Note_Id for en in All_Evaluat_Notes}
+    All_Notes = {n.Id: n for n in Note.query.all()}
+
+    All_Comments = Comment.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
+    SkillCode = {s.Id: s.Code for s in All_Skills}
+    Student_Comments_Map = {}
+    for c in All_Comments:
+        sid = c.Studnt_Id
+        skill_label = SkillCode.get(c.Skill_Id) if c.Skill_Id else 'General'
+        text = (c.Text or '').replace('\n', ' ').strip()
+        entry = f"[{skill_label}] {text}"
+        Student_Comments_Map.setdefault(sid, []).append(entry)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = Current_Evaluat.Name[:31]
+
+    # Header (Email removed)
+    headers = ['Student'] + [s.Code for s in All_Skills] + ['Note', 'Comments']
+    ws.append(headers)
+
+    # helper: convert hex color to openpyxl PatternFill
+    def fill_from_color(color_str):
+        if not color_str:
+            return None
+        s = color_str.strip()
+        if s.startswith('#'):
+            hexc = s[1:]
+        else:
+            hexc = s
+        if len(hexc) == 3:
+            hexc = ''.join(ch*2 for ch in hexc)
+        if len(hexc) != 6:
+            return None
+        return PatternFill(start_color=hexc.upper(), end_color=hexc.upper(), fill_type='solid')
+
+    # Write rows
+    for st in All_Studnts:
+        row = [st.Name]
+        for sk in All_Skills:
+            sc = Scores_Dict.get((st.Id, sk.Id))
+            if sc and sc.Level:
+                # Use level description instead of percent
+                val = f"{sc.Level.Descrip}"
+            else:
+                val = ''
+            row.append(val)
+        # Note
+        nid = Student_Note_Map.get(st.Id)
+        note_text = ''
+        if nid:
+            n = All_Notes.get(nid)
+            if n:
+                # Only include the numeric value for exports (no description)
+                note_text = str(n.Valeure)
+        row.append(note_text)
+        # Comments
+        comments_cell = ' | '.join(Student_Comments_Map.get(st.Id, []))
+        row.append(comments_cell)
+        ws.append(row)
+
+    # Apply fills to skill cells based on Level colors
+    # header offset: Student=1, skills start at col 2 (Email removed)
+    for r_idx, st in enumerate(All_Studnts, start=2):
+        for c_idx, sk in enumerate(All_Skills, start=2):
+            sc = Scores_Dict.get((st.Id, sk.Id))
+            if sc and sc.Level and sc.Level.Color:
+                fill = fill_from_color(sc.Level.Color)
+                if fill:
+                    ws.cell(row=r_idx, column=c_idx).fill = fill
+
+    # Prepare output
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+
+    fname = f'evaluat_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    return send_file(bio, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=fname)
 
 
 if __name__ == '__main__':

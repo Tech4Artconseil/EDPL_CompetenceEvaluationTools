@@ -36,6 +36,7 @@
             </div>
             <div class="actions">
                 <a href="/export/csv?evaluat_id={{ Evaluat.Id }}" class="btn-export">Export CSV</a>
+                <a href="/export/xlsx?evaluat_id={{ Evaluat.Id }}" class="btn-export" style="margin-left:8px">Export XLSX</a>
             </div>
         </header>
 
@@ -52,7 +53,7 @@
                         </th>
                         {% endfor %}
                         {% if Evaluat.Show_Optional_Column %}
-                        <th class="optional-header">Optionnel</th>
+                        <th class="optional-header">Note</th>
                         {% endif %}
                         <th class="comment-header">Commentaires</th>
                     </tr>
@@ -94,7 +95,7 @@
                         {% endfor %}
                         {% if Evaluat.Show_Optional_Column %}
                         <td class="optional-cell" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}">
-                            <select class="optional-note-select" onchange="Eval_Set_Optional_Note(this)" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}">
+                            <select class="optional-note-select" onchange="Eval_Set_Optional_Note(this)" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}" aria-label="Note par étudiant">
                                 <option value="">-</option>
                                 {% for note in All_Notes %}
                                 <option value="{{ note.Id }}" {% if Student_Notes_Dict.get(Studnt_tmp.Id) == note.Id %}selected{% endif %}>{{ note.Valeure }}{% if note.Descript %} - {{ note.Descript }}{% endif %}</option>
