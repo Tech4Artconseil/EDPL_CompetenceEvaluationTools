@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluation Dashboard - {{ Evaluat.Name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/Main_Style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header section with evaluation info and export button -->
+        <header class="header">
+            <h1>Evaluation Dashboard</h1>
+            <div class="eval-info">
+                <h2>{{ Evaluat.Name }}</h2>
+                <p>Group: {{ Evaluat.Group.Name }} | Skills Set: {{ Evaluat.SkillSet_Id }}</p>
+            </div>
+            <div class="actions">
+                <a href="/export/csv" class="btn-export">Export CSV</a>
+            </div>
+        </header>
+
+        <!-- Evaluation grid -->
+        <div class="grid-container">
+            <table class="eval-grid">
+                <thead>
+                    <tr>
+                        <th class="student-header">Student</th>
+                        {% for Skill_tmp in Skills %}
+                        <th class="skill-header">
+                            <div class="skill-code">{{ Skill_tmp.Code }}</div>
+                            <div class="skill-desc">{{ Skill_tmp.Descrip }}</div>
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for Studnt_tmp in Studnts %}
+                    <tr>
+                        <td class="student-cell">
+                            <div class="student-name">{{ Studnt_tmp.Name }}</div>
+                            <div class="student-email">{{ Studnt_tmp.Email }}</div>
+                        </td>
+                        {% for Skill_tmp in Skills %}
+                        {% set Key = (Studnt_tmp.Id, Skill_tmp.Id) %}
+                        {% set Score_Entry = Scores_Dict.get(Key) %}
+                        {% set Cell_Comments = Comments_Dict.get(Key, []) %}
+                        <td class="eval-cell" 
+                            data-student-id="{{ Studnt_tmp.Id }}"
+                            data-skill-id="{{ Skill_tmp.Id }}"
+                            data-evaluat-id="{{ Evaluat.Id }}">
+                            
+                            <!-- Level selector -->
+                            <select class="level-select" 
+                                    onchange="Eval_Update_Score(this)"
+                                    {% if Score_Entry and Score_Entry.Level %}
+                                    style="background-color: {{ Score_Entry.Level.Color|lower }};"
+                                    {% endif %}>
+                                <option value="">-</option>
+                                {% for Level_tmp in Levels %}
+                                <option value="{{ Level_tmp.Id }}"
+                                        data-color="{{ Level_tmp.Color }}"
+                                        {% if Score_Entry and Score_Entry.Level_Id == Level_tmp.Id %}selected{% endif %}>
+                                    {{ Level_tmp.Percent }}% - {{ Level_tmp.Descrip }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            
+                            <!-- Comment button and count -->
+                            <div class="comment-section">
+                                <button class="btn-comment" onclick="Eval_Show_Comments(this)">
+                                    💬 {% if Cell_Comments|length > 0 %}({{ Cell_Comments|length }}){% endif %}
+                                </button>
+                            </div>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Legend for levels -->
+        <div class="legend">
+            <h3>Legend:</h3>
+            <div class="legend-items">
+                {% for Level_tmp in Levels %}
+                <div class="legend-item">
+                    <span class="legend-color" style="background-color: {{ Level_tmp.Color|lower }};"></span>
+                    <span class="legend-text">{{ Level_tmp.Percent }}% - {{ Level_tmp.Descrip }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Comment modal -->
+    <div id="commentModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="Eval_Close_Modal()">&times;</span>
+            <h2>Comments</h2>
+            <div id="commentsList"></div>
+            <div class="comment-form">
+                <textarea id="newCommentText" placeholder="Add a comment..."></textarea>
+                <button onclick="Eval_Add_Comment()">Add Comment</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables for current comment context
+        let Current_Studnt_Id = null;
+        let Current_Skill_Id = null;
+        let Current_Evaluat_Id = null;
+
+        /**
+         * Update score when level selector changes.
+         * Sends AJAX request to update database and changes cell color.
+         */
+        function Eval_Update_Score(selectElement) {
+            const Cell = selectElement.closest('.eval-cell');
+            const Studnt_Id = parseInt(Cell.dataset.studentId);
+            const Skill_Id = parseInt(Cell.dataset.skillId);
+            const Evaluat_Id = parseInt(Cell.dataset.evaluatId);
+            const Level_Id = selectElement.value ? parseInt(selectElement.value) : null;
+
+            // Get color from selected option
+            const Selected_Option = selectElement.options[selectElement.selectedIndex];
+            const Color = Selected_Option.dataset.color;
+
+            // Update cell background color
+            if (Color) {
+                selectElement.style.backgroundColor = Color.toLowerCase();
+            } else {
+                selectElement.style.backgroundColor = '';
+            }
+
+            // Send update to server
+            fetch('/api/score/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    studnt_id: Studnt_Id,
+                    skill_id: Skill_Id,
+                    level_id: Level_Id,
+                    evaluat_id: Evaluat_Id
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Error updating score: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error updating score');
+            });
+        }
+
+        /**
+         * Show comments modal for a specific student/skill combination.
+         * Loads existing comments from server.
+         */
+        function Eval_Show_Comments(button) {
+            const Cell = button.closest('.eval-cell');
+            Current_Studnt_Id = parseInt(Cell.dataset.studentId);
+            Current_Skill_Id = parseInt(Cell.dataset.skillId);
+            Current_Evaluat_Id = parseInt(Cell.dataset.evaluatId);
+
+            // Load comments
+            fetch(`/api/comment/list?studnt_id=${Current_Studnt_Id}&skill_id=${Current_Skill_Id}&evaluat_id=${Current_Evaluat_Id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Eval_Display_Comments(data.comments);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+
+            // Show modal
+            document.getElementById('commentModal').style.display = 'block';
+        }
+
+        /**
+         * Display comments in the modal.
+         * Takes array of comment objects and renders them.
+         */
+        function Eval_Display_Comments(comments) {
+            const Comments_List = document.getElementById('commentsList');
+            Comments_List.innerHTML = '';
+
+            if (comments.length === 0) {
+                Comments_List.innerHTML = '<p class="no-comments">No comments yet.</p>';
+                return;
+            }
+
+            // Loop through comments and create HTML elements
+            comments.forEach(Comment_tmp => {
+                const Comment_Div = document.createElement('div');
+                Comment_Div.className = 'comment-item';
+                
+                const Comment_Date = new Date(Comment_tmp.CreatedAt);
+                const Date_Str = Comment_Date.toLocaleDateString() + ' ' + Comment_Date.toLocaleTimeString();
+                
+                Comment_Div.innerHTML = `
+                    <div class="comment-text">${Comment_tmp.Text}</div>
+                    <div class="comment-date">${Date_Str}</div>
+                `;
+                Comments_List.appendChild(Comment_Div);
+            });
+        }
+
+        /**
+         * Add a new comment.
+         * Sends comment text to server and refreshes comment list.
+         */
+        function Eval_Add_Comment() {
+            const Comment_Text = document.getElementById('newCommentText').value;
+
+            if (!Comment_Text.trim()) {
+                alert('Please enter a comment');
+                return;
+            }
+
+            fetch('/api/comment/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    studnt_id: Current_Studnt_Id,
+                    skill_id: Current_Skill_Id,
+                    evaluat_id: Current_Evaluat_Id,
+                    comment_text: Comment_Text
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear textarea
+                    document.getElementById('newCommentText').value = '';
+                    
+                    // Reload comments
+                    return fetch(`/api/comment/list?studnt_id=${Current_Studnt_Id}&skill_id=${Current_Skill_Id}&evaluat_id=${Current_Evaluat_Id}`);
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Eval_Display_Comments(data.comments);
+                    
+                    // Update comment count in grid
+                    const Cell = document.querySelector(
+                        `.eval-cell[data-student-id="${Current_Studnt_Id}"][data-skill-id="${Current_Skill_Id}"]`
+                    );
+                    const Comment_Btn = Cell.querySelector('.btn-comment');
+                    Comment_Btn.textContent = `💬 (${data.comments.length})`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error adding comment: ' + error.message);
+            });
+        }
+
+        /**
+         * Close the comment modal.
+         */
+        function Eval_Close_Modal() {
+            document.getElementById('commentModal').style.display = 'none';
+            Current_Studnt_Id = null;
+            Current_Skill_Id = null;
+            Current_Evaluat_Id = null;
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const Modal = document.getElementById('commentModal');
+            if (event.target === Modal) {
+                Eval_Close_Modal();
+            }
+        }
+    </script>
+</body>
+</html>
