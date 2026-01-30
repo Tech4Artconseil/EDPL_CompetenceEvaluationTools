@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from Data_Models import Db, Level, Skill, StudntGrp, Studnt, Evaluat, Score, Comment
+from Data_Models import Db, Level, Skill, StudntGrp, Studnt, Evaluat, Score, Comment, Note
 import re
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -35,6 +35,7 @@ MODEL_MAP = {
     'studnts': Studnt,
     'evaluats': Evaluat,
     'levels': Level,
+    'notes': Note,
 }
 
 
@@ -48,6 +49,7 @@ REF_MODELS = {
     'Skill': Skill,
     'Evaluat': Evaluat,
     'Level': Level,
+    'Note': Note,
 }
 
 
@@ -104,7 +106,12 @@ def create_resource(resource):
     if request.method == 'POST':
         data = {}
         for c in cols:
-            val = request.form.get(c)
+            # Special handling for checkbox fields (boolean)
+            if c == 'Show_Optional_Column':
+                # checkbox sends value when checked, nothing when unchecked
+                val = True if request.form.get(c) else False
+            else:
+                val = request.form.get(c)
             # convert integer foreign keys to int when applicable
             if c in fk_int_fields and val:
                 try:
@@ -197,7 +204,11 @@ def edit_resource(resource, item_id):
         old_group = getattr(item, 'Group_Id', None)
         for c in cols:
             if hasattr(item, c):
-                val = request.form.get(c)
+                # handle checkbox for boolean fields
+                if c == 'Show_Optional_Column':
+                    val = True if request.form.get(c) else False
+                else:
+                    val = request.form.get(c)
                 # convert ints for FK fields
                 if c in fk_int_fields and val:
                     try:
@@ -205,7 +216,11 @@ def edit_resource(resource, item_id):
                     except ValueError:
                         setattr(item, c, None)
                 else:
-                    setattr(item, c, val if val != '' else None)
+                    # For boolean checkbox, val is already True/False
+                    if isinstance(val, bool):
+                        setattr(item, c, val)
+                    else:
+                        setattr(item, c, val if val != '' else None)
         Db.session.commit()
 
         # If editing a student, ensure Score entries for new group/evaluations exist

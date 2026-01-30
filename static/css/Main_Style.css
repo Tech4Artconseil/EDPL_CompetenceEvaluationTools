@@ -185,6 +185,38 @@ body {
     vertical-align: top;
 }
 
+/* Optional column (per-evaluation toggle) */
+.optional-header {
+    background-color: #3d566e;
+    color: white;
+    font-weight: bold;
+    min-width: 110px;
+    max-width: 160px;
+    width: 140px;
+}
+
+.optional-cell {
+    min-width: 110px;
+    max-width: 160px;
+    width: 140px;
+    vertical-align: top;
+    padding: 6px 8px;
+}
+
+/* Select inside optional column should never overflow its cell */
+.optional-note-select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 6px;
+    border: 2px solid #bdc3c7;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.optional-note-select:focus { outline: none; border-color: #2980b9; }
+
 /* Level selector */
 .level-select {
     width: 100%;

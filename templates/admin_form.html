@@ -36,6 +36,19 @@
             {# Special case: color picker for Level.Color #}
                 {% if resource == 'levels' and c == 'Color' %}
                 <input type="color" name="{{ c }}" value="{% if item %}{% if item is mapping %}{{ norm_color(item[c])|default('#ffffff') }}{% else %}{{ norm_color(attr(item, c))|default('#ffffff') }}{% endif %}{% else %}{{ norm_color(request.form.get(c,'#ffffff')) }}{% endif %}">
+            {% elif resource == 'evaluats' and c == 'Show_Optional_Column' %}
+                {# Checkbox for showing optional column in evaluation grid #}
+                {% set checked = false %}
+                {% if item %}
+                    {% if item is mapping %}
+                        {% if item[c] %}{% set checked = true %}{% endif %}
+                    {% else %}
+                        {% if attr(item, c) %}{% set checked = true %}{% endif %}
+                    {% endif %}
+                {% else %}
+                    {% if request.form.get(c) %}{% set checked = true %}{% endif %}
+                {% endif %}
+                <input type="checkbox" name="{{ c }}" {% if checked %}checked{% endif %}>
             {% else %}
                 <input name="{{ c }}" value="{% if item %}{% if item is mapping %}{{ item[c]|default('') }}{% else %}{{ attr(item, c)|default('') }}{% endif %}{% else %}{{ request.form.get(c,'') }}{% endif %}">
             {% endif %}

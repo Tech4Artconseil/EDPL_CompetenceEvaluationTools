@@ -7,7 +7,7 @@ Handles dashboard display, score updates, comments, and CSV export.
 import os
 from flask import Flask, render_template, request, jsonify, send_file
 import re
-from Data_Models import Db, Level, Skill, Studnt, Evaluat, Score, Comment
+from Data_Models import Db, Level, Skill, Studnt, Evaluat, Score, Comment, Note, EvaluatNote
 from admin import admin_bp
 import csv
 import io
@@ -121,6 +121,13 @@ def App_Main_Dashboard():
             if sid not in Student_Comments_Dict:
                 Student_Comments_Dict[sid] = []
             Student_Comments_Dict[sid].append(Comment_tmp)
+
+    # Get all notes and build mapping student_id -> note_id for this evaluation
+    All_Notes = Note.query.order_by(Note.Valeure.desc()).all()
+    Student_Notes_Dict = {}
+    All_Evaluat_Notes = EvaluatNote.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
+    for en in All_Evaluat_Notes:
+        Student_Notes_Dict[en.Studnt_Id] = en.Note_Id
     
     return render_template(
         'Eval_Dash.html',
@@ -129,11 +136,51 @@ def App_Main_Dashboard():
         Studnts=All_Studnts,
         Skills=All_Skills,
         Levels=All_Levels,
+        All_Notes=All_Notes,
         Scores_Dict=Scores_Dict,
         Comments_Dict=Comments_Dict,
         Student_Comments_Dict=Student_Comments_Dict,
+        Student_Notes_Dict=Student_Notes_Dict,
         norm_color=norm_color
     )
+
+
+
+@App.route('/api/evaluat/note/set', methods=['POST'])
+def App_Main_Evaluat_Note_Set():
+    """Assign or remove a Note for a student in an evaluation.
+    JSON: {evaluat_id, studnt_id, note_id|null}
+    """
+    Data = request.get_json() or {}
+    evaluat_id = Data.get('evaluat_id')
+    studnt_id = Data.get('studnt_id')
+    note_id = Data.get('note_id')  # can be null to remove
+
+    if not evaluat_id or not studnt_id:
+        return jsonify({'success': False, 'error': 'evaluat_id and studnt_id required'}), 400
+
+    try:
+        existing = EvaluatNote.query.filter_by(Evaluat_Id=evaluat_id, Studnt_Id=studnt_id).first()
+        if not note_id:
+            if existing:
+                Db.session.delete(existing)
+                Db.session.commit()
+            return jsonify({'success': True})
+
+        note = Note.query.get(int(note_id))
+        if not note:
+            return jsonify({'success': False, 'error': 'Note not found'}), 404
+
+        if existing:
+            existing.Note_Id = note.Id
+        else:
+            en = EvaluatNote(Evaluat_Id=evaluat_id, Studnt_Id=studnt_id, Note_Id=note.Id)
+            Db.session.add(en)
+        Db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        Db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @App.route('/api/score/update', methods=['POST'])
@@ -164,6 +211,64 @@ def App_Main_Score_Update():
     Db.session.commit()
     
     return jsonify({'success': True})
+
+
+@App.route('/api/notes/list', methods=['GET'])
+def App_Main_Notes_List():
+    """Return list of all notes as JSON."""
+    All_Notes = Note.query.order_by(Note.Valeure.desc()).all()
+    notes = [n.Note_To_Dict() for n in All_Notes]
+    return jsonify({'success': True, 'notes': notes})
+
+
+@App.route('/api/notes/add', methods=['POST'])
+def App_Main_Notes_Add():
+    """Create or update a Note. JSON body: {id?, valeure, descript}
+    If id provided, update; otherwise create new.
+    """
+    Data = request.get_json() or {}
+    nid = Data.get('id')
+    valeure = Data.get('valeure')
+    descript = Data.get('descript')
+
+    if valeure is None:
+        return jsonify({'success': False, 'error': 'Field "valeure" is required'}), 400
+
+    try:
+        if nid:
+            note = Note.query.get(int(nid))
+            if not note:
+                return jsonify({'success': False, 'error': 'Note not found'}), 404
+            note.Valeure = int(valeure)
+            note.Descript = descript
+        else:
+            note = Note(Valeure=int(valeure), Descript=descript)
+            Db.session.add(note)
+        Db.session.commit()
+        return jsonify({'success': True, 'note': note.Note_To_Dict()})
+    except Exception as e:
+        Db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@App.route('/api/notes/delete', methods=['POST'])
+def App_Main_Notes_Delete():
+    """Delete a note. JSON body: {id}
+    """
+    Data = request.get_json() or {}
+    nid = Data.get('id')
+    if not nid:
+        return jsonify({'success': False, 'error': 'Field "id" is required'}), 400
+    try:
+        note = Note.query.get(int(nid))
+        if not note:
+            return jsonify({'success': False, 'error': 'Note not found'}), 404
+        Db.session.delete(note)
+        Db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        Db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @App.route('/api/comment/add', methods=['POST'])

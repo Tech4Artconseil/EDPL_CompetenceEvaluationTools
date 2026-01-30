@@ -18,6 +18,7 @@
                 <a class="btn" href="/admin/studnts">Students</a>
                 <a class="btn" href="/admin/evaluats">Evaluations</a>
                 <a class="btn" href="/admin/levels">Levels</a>
+                <a class="btn" href="/admin/notes">Notes</a>
             </div>
 
             <!-- Evaluation panels -->
@@ -50,6 +51,9 @@
                             <div class="skill-desc">{{ Skill_tmp.Descrip }}</div>
                         </th>
                         {% endfor %}
+                        {% if Evaluat.Show_Optional_Column %}
+                        <th class="optional-header">Optionnel</th>
+                        {% endif %}
                         <th class="comment-header">Commentaires</th>
                     </tr>
                 </thead>
@@ -88,6 +92,16 @@
                             <!-- Comment button removed from per-skill cell; moved to final column -->
                         </td>
                         {% endfor %}
+                        {% if Evaluat.Show_Optional_Column %}
+                        <td class="optional-cell" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}">
+                            <select class="optional-note-select" onchange="Eval_Set_Optional_Note(this)" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}">
+                                <option value="">-</option>
+                                {% for note in All_Notes %}
+                                <option value="{{ note.Id }}" {% if Student_Notes_Dict.get(Studnt_tmp.Id) == note.Id %}selected{% endif %}>{{ note.Valeure }}{% if note.Descript %} - {{ note.Descript }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        {% endif %}
                         <!-- Final column: per-student comments for the whole evaluation -->
                         <td class="comment-cell" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}">
                             {% set Student_Comments = Student_Comments_Dict.get(Studnt_tmp.Id, []) %}
@@ -350,6 +364,32 @@
                 Eval_Close_Modal();
             }
         });
+
+        /**
+         * Set or unset the optional Note for a student in the current evaluation.
+         */
+        function Eval_Set_Optional_Note(selectElem) {
+            const studntId = parseInt(selectElem.dataset.studentId);
+            const evaluatId = parseInt(selectElem.dataset.evaluatId);
+            const val = selectElem.value;
+            const noteId = val ? parseInt(val) : null;
+
+            fetch('/api/evaluat/note/set', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({evaluat_id: evaluatId, studnt_id: studntId, note_id: noteId})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Erreur lors de la sauvegarde de la note optionnelle: ' + (data.error||''));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Erreur réseau lors de la sauvegarde de la note optionnelle');
+            });
+        }
     </script>
 </body>
 </html>

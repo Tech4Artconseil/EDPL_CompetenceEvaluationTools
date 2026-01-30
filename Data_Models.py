@@ -95,6 +95,8 @@ class Evaluat(Db.Model):
     Name = Db.Column(Db.String(200), nullable=False)
     Group_Id = Db.Column(Db.Integer, Db.ForeignKey('studnt_grps.Id'), nullable=False)
     SkillSet_Id = Db.Column(Db.String(50), nullable=False)
+    # Whether to show the optional extra column in the evaluation grid
+    Show_Optional_Column = Db.Column(Db.Boolean, nullable=False, default=False)
     CreatedAt = Db.Column(Db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -164,4 +166,42 @@ class Comment(Db.Model):
             'Skill_Id': self.Skill_Id,
             'Text': self.Text,
             'CreatedAt': self.CreatedAt.isoformat() if self.CreatedAt else None
+        }
+
+
+class Note(Db.Model):
+    """Note model - numeric grading items for alternative evaluation mode"""
+    __tablename__ = 'notes'
+
+    Id = Db.Column(Db.Integer, primary_key=True)
+    Valeure = Db.Column(Db.BigInteger, nullable=False)
+    Descript = Db.Column(Db.Text, nullable=True)
+
+    def Note_To_Dict(self):
+        return {
+            'Id': self.Id,
+            'Valeure': self.Valeure,
+            'Descript': self.Descript
+        }
+
+
+class EvaluatNote(Db.Model):
+    """Mapping of a Note assigned to a student for a specific Evaluat (per-student optional column)."""
+    __tablename__ = 'evaluat_notes'
+
+    Id = Db.Column(Db.Integer, primary_key=True)
+    Evaluat_Id = Db.Column(Db.Integer, Db.ForeignKey('evaluats.Id'), nullable=False)
+    Studnt_Id = Db.Column(Db.Integer, Db.ForeignKey('studnts.Id'), nullable=False)
+    Note_Id = Db.Column(Db.Integer, Db.ForeignKey('notes.Id'), nullable=False)
+
+    Evaluat = Db.relationship('Evaluat', backref='evaluat_notes')
+    Studnt = Db.relationship('Studnt', backref='evaluat_notes')
+    Note = Db.relationship('Note', backref='evaluat_notes')
+
+    def EvaluatNote_To_Dict(self):
+        return {
+            'Id': self.Id,
+            'Evaluat_Id': self.Evaluat_Id,
+            'Studnt_Id': self.Studnt_Id,
+            'Note_Id': self.Note_Id
         }
