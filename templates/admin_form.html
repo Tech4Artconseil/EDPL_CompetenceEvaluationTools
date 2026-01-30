@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>{{ 'Éditer' if item else 'Créer' }} - {{ resource }}</title>
+    <style>label{display:block;margin-top:6px}</style>
+</head>
+<body>
+    <h1>{{ 'Éditer' if item else 'Créer' }} {{ resource }}</h1>
+    <form method="post">
+    {% for c in columns %}
+        <label>{{ c }}
+        {% if choices and c in choices %}
+            <select name="{{ c }}">
+                <option value="">-</option>
+                {% for val, label in choices[c] %}
+                    {% set selected = false %}
+                    {% if item %}
+                        {% if item is mapping %}
+                            {% set cur = item[c] %}
+                        {% else %}
+                            {% set cur = attr(item, c) %}
+                        {% endif %}
+                        {% if cur is not none and (cur|string) == val %}
+                            {% set selected = true %}
+                        {% endif %}
+                    {% else %}
+                        {% if request.form.get(c) == val %}
+                            {% set selected = true %}
+                        {% endif %}
+                    {% endif %}
+                    <option value="{{ val }}" {% if selected %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        {% else %}
+            {# Special case: color picker for Level.Color #}
+                {% if resource == 'levels' and c == 'Color' %}
+                <input type="color" name="{{ c }}" value="{% if item %}{% if item is mapping %}{{ norm_color(item[c])|default('#ffffff') }}{% else %}{{ norm_color(attr(item, c))|default('#ffffff') }}{% endif %}{% else %}{{ norm_color(request.form.get(c,'#ffffff')) }}{% endif %}">
+            {% else %}
+                <input name="{{ c }}" value="{% if item %}{% if item is mapping %}{{ item[c]|default('') }}{% else %}{{ attr(item, c)|default('') }}{% endif %}{% else %}{{ request.form.get(c,'') }}{% endif %}">
+            {% endif %}
+        {% endif %}
+        </label>
+    {% endfor %}
+        {% if item %}
+            <button type="submit" name="action" value="apply">Appliquer</button>
+            <button type="submit">Enregistrer</button>
+        {% else %}
+            <button type="submit">Enregistrer</button>
+        {% endif %}
+    </form>
+    <p><a href="{{ url_for('admin.list_resource', resource=resource) }}">Retour</a></p>
+</body>
+</html>

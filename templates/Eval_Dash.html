@@ -11,12 +11,30 @@
         <!-- Header section with evaluation info and export button -->
         <header class="header">
             <h1>Evaluation Dashboard</h1>
+            <!-- Admin button bar -->
+            <div class="admin-bar">
+                <a class="btn" href="/admin/skills">Skills</a>
+                <a class="btn" href="/admin/studnt_grps">Groups</a>
+                <a class="btn" href="/admin/studnts">Students</a>
+                <a class="btn" href="/admin/evaluats">Evaluations</a>
+                <a class="btn" href="/admin/levels">Levels</a>
+            </div>
+
+            <!-- Evaluation panels -->
+            <div class="eval-panels">
+                {% for ev in All_Evaluats %}
+                <a class="eval-panel {% if ev.Id == Evaluat.Id %}active{% endif %}" href="?evaluat_id={{ ev.Id }}">
+                    <div class="title">{{ ev.Name }}</div>
+                    <div class="meta">Group: {{ ev.Group.Name }} • SkillSet: {{ ev.SkillSet_Id }}</div>
+                </a>
+                {% endfor %}
+            </div>
             <div class="eval-info">
                 <h2>{{ Evaluat.Name }}</h2>
                 <p>Group: {{ Evaluat.Group.Name }} | Skills Set: {{ Evaluat.SkillSet_Id }}</p>
             </div>
             <div class="actions">
-                <a href="/export/csv" class="btn-export">Export CSV</a>
+                <a href="/export/csv?evaluat_id={{ Evaluat.Id }}" class="btn-export">Export CSV</a>
             </div>
         </header>
 
@@ -32,6 +50,7 @@
                             <div class="skill-desc">{{ Skill_tmp.Descrip }}</div>
                         </th>
                         {% endfor %}
+                        <th class="comment-header">Commentaires</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -42,7 +61,7 @@
                             <div class="student-email">{{ Studnt_tmp.Email }}</div>
                         </td>
                         {% for Skill_tmp in Skills %}
-                        {% set Key = (Studnt_tmp.Id, Skill_tmp.Id) %}
+                        {% set Key = Studnt_tmp.Id ~ '_' ~ Skill_tmp.Id %}
                         {% set Score_Entry = Scores_Dict.get(Key) %}
                         {% set Cell_Comments = Comments_Dict.get(Key, []) %}
                         <td class="eval-cell" 
@@ -54,26 +73,30 @@
                             <select class="level-select" 
                                     onchange="Eval_Update_Score(this)"
                                     {% if Score_Entry and Score_Entry.Level %}
-                                    style="background-color: {{ Score_Entry.Level.Color|lower }};"
+                                    style="background-color: {{ norm_color(Score_Entry.Level.Color) }};"
                                     {% endif %}>
                                 <option value="">-</option>
                                 {% for Level_tmp in Levels %}
                                 <option value="{{ Level_tmp.Id }}"
-                                        data-color="{{ Level_tmp.Color }}"
+                                        data-color="{{ norm_color(Level_tmp.Color) }}"
                                         {% if Score_Entry and Score_Entry.Level_Id == Level_tmp.Id %}selected{% endif %}>
                                     {{ Level_tmp.Percent }}% - {{ Level_tmp.Descrip }}
                                 </option>
                                 {% endfor %}
                             </select>
                             
-                            <!-- Comment button and count -->
+                            <!-- Comment button removed from per-skill cell; moved to final column -->
+                        </td>
+                        {% endfor %}
+                        <!-- Final column: per-student comments for the whole evaluation -->
+                        <td class="comment-cell" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}">
+                            {% set Student_Comments = Student_Comments_Dict.get(Studnt_tmp.Id, []) %}
                             <div class="comment-section">
-                                <button class="btn-comment" onclick="Eval_Show_Comments(this)">
-                                    💬 {% if Cell_Comments|length > 0 %}({{ Cell_Comments|length }}){% endif %}
+                                <button class="btn-comment-row" onclick="Eval_Show_Comments(this)" aria-label="View student comments">
+                                    💬{% if Student_Comments|length > 0 %} ({{ Student_Comments|length }}){% endif %}
                                 </button>
                             </div>
                         </td>
-                        {% endfor %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -86,7 +109,7 @@
             <div class="legend-items">
                 {% for Level_tmp in Levels %}
                 <div class="legend-item">
-                    <span class="legend-color" style="background-color: {{ Level_tmp.Color|lower }};"></span>
+                    <span class="legend-color" style="background-color: {{ norm_color(Level_tmp.Color) }};"></span>
                     <span class="legend-text">{{ Level_tmp.Percent }}% - {{ Level_tmp.Descrip }}</span>
                 </div>
                 {% endfor %}
@@ -110,7 +133,7 @@
     <script>
         // Global variables for current comment context
         let Current_Studnt_Id = null;
-        let Current_Skill_Id = null;
+        let Current_Skill_Id = null; // null means student-level comment (not tied to a skill)
         let Current_Evaluat_Id = null;
 
         /**
@@ -165,13 +188,21 @@
          * Loads existing comments from server.
          */
         function Eval_Show_Comments(button) {
-            const Cell = button.closest('.eval-cell');
+            // Find the nearest table cell (can be a skill cell or the final comment cell)
+            const Cell = button.closest('td');
             Current_Studnt_Id = parseInt(Cell.dataset.studentId);
-            Current_Skill_Id = parseInt(Cell.dataset.skillId);
+            // skill-id may be undefined for the per-student comment column
+            Current_Skill_Id = Cell.dataset.skillId ? parseInt(Cell.dataset.skillId) : null;
             Current_Evaluat_Id = parseInt(Cell.dataset.evaluatId);
 
+            // Build URL conditionally (omit skill_id for student-level comments)
+            let url = `/api/comment/list?studnt_id=${Current_Studnt_Id}&evaluat_id=${Current_Evaluat_Id}`;
+            if (Current_Skill_Id !== null) {
+                url += `&skill_id=${Current_Skill_Id}`;
+            }
+
             // Load comments
-            fetch(`/api/comment/list?studnt_id=${Current_Studnt_Id}&skill_id=${Current_Skill_Id}&evaluat_id=${Current_Evaluat_Id}`)
+            fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -207,10 +238,16 @@
                 const Comment_Date = new Date(Comment_tmp.CreatedAt);
                 const Date_Str = Comment_Date.toLocaleDateString() + ' ' + Comment_Date.toLocaleTimeString();
                 
-                Comment_Div.innerHTML = `
-                    <div class="comment-text">${Comment_tmp.Text}</div>
-                    <div class="comment-date">${Date_Str}</div>
-                `;
+                const TextDiv = document.createElement('div');
+                TextDiv.className = 'comment-text';
+                TextDiv.textContent = Comment_tmp.Text;
+
+                const DateDiv = document.createElement('div');
+                DateDiv.className = 'comment-date';
+                DateDiv.textContent = Date_Str;
+
+                Comment_Div.appendChild(TextDiv);
+                Comment_Div.appendChild(DateDiv);
                 Comments_List.appendChild(Comment_Div);
             });
         }
@@ -240,30 +277,56 @@
                 })
             })
             .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Clear textarea
-                    document.getElementById('newCommentText').value = '';
-                    
-                    // Reload comments
-                    return fetch(`/api/comment/list?studnt_id=${Current_Studnt_Id}&skill_id=${Current_Skill_Id}&evaluat_id=${Current_Evaluat_Id}`);
-                } else {
-                    throw new Error(data.error || 'Unknown error');
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Eval_Display_Comments(data.comments);
-                    
-                    // Update comment count in grid
-                    const Cell = document.querySelector(
-                        `.eval-cell[data-student-id="${Current_Studnt_Id}"][data-skill-id="${Current_Skill_Id}"]`
-                    );
-                    const Comment_Btn = Cell.querySelector('.btn-comment');
-                    Comment_Btn.textContent = `💬 (${data.comments.length})`;
-                }
-            })
+                    .then(data => {
+                        if (data.success) {
+                            // Clear textarea
+                            document.getElementById('newCommentText').value = '';
+                            
+                            // Reload comments (again without skill_id when null)
+                            let listUrl = `/api/comment/list?studnt_id=${Current_Studnt_Id}&evaluat_id=${Current_Evaluat_Id}`;
+                            if (Current_Skill_Id !== null) {
+                                listUrl += `&skill_id=${Current_Skill_Id}`;
+                            }
+                            return fetch(listUrl);
+                        } else {
+                            throw new Error(data.error || 'Unknown error');
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Eval_Display_Comments(data.comments);
+
+                            // Update comment count in grid
+                            if (Current_Skill_Id !== null) {
+                                const Cell = document.querySelector(
+                                    `.eval-cell[data-student-id="${Current_Studnt_Id}"][data-skill-id="${Current_Skill_Id}"]`
+                                );
+                                if (Cell) {
+                                    const Comment_Btn = Cell.querySelector('.btn-comment');
+                                    if (Comment_Btn) {
+                                        if (data.comments.length > 0) {
+                                            Comment_Btn.textContent = `💬 (${data.comments.length})`;
+                                        } else {
+                                            Comment_Btn.textContent = '💬';
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Update the per-student comment button in the final column
+                                const RowBtn = document.querySelector(
+                                    `.comment-cell[data-student-id="${Current_Studnt_Id}"] .btn-comment-row`
+                                );
+                                if (RowBtn) {
+                                    if (data.comments.length > 0) {
+                                        RowBtn.textContent = `💬 (${data.comments.length})`;
+                                    } else {
+                                        RowBtn.textContent = '💬';
+                                    }
+                                }
+                            }
+                        }
+                    })
             .catch(error => {
                 console.error('Error:', error);
                 alert('Error adding comment: ' + error.message);
@@ -281,12 +344,12 @@
         }
 
         // Close modal when clicking outside of it
-        window.onclick = function(event) {
+        window.addEventListener('click', function(event) {
             const Modal = document.getElementById('commentModal');
             if (event.target === Modal) {
                 Eval_Close_Modal();
             }
-        }
+        });
     </script>
 </body>
 </html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Prévisualisation import CSV</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/Main_Style.css') }}">
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 6px; }
+        .small { font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>Prévisualisation de l'import</h1>
+    {% if errors %}
+        <div class="errors">
+            <h3>Erreurs détectées :</h3>
+            <ul>
+            {% for e in errors %}
+                <li>{{ e }}</li>
+            {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <form method="post">
+        <input type="hidden" name="confirm" value="1">
+
+        <label>Forcer le groupe pour tous les étudiants :
+            <select name="force_group">
+                <option value="">— Aucun (utiliser les valeurs du fichier) —</option>
+                {% for g in groups %}
+                <option value="{{ g.Id }}">{{ g.Name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <p>Voici les lignes détectées (vous pouvez modifier les valeurs si nécessaire avant confirmation) :</p>
+        <table>
+            <thead>
+                <tr><th>#</th><th>Name</th><th>Email</th><th>Group (CSV)</th></tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="small">{{ loop.index }}</td>
+                    <td>
+                        <input type="text" name="row_{{ loop.index0 }}_name" value="{{ row.name }}" style="width:100%">
+                    </td>
+                    <td>
+                        <input type="text" name="row_{{ loop.index0 }}_email" value="{{ row.email }}" style="width:100%">
+                    </td>
+                    <td>
+                        <input type="text" name="row_{{ loop.index0 }}_group" value="{{ row.group }}" style="width:100%">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p>
+            <button type="submit">Confirmer l'import</button>
+            <a href="{{ url_for('importer.import_studnts') }}">Annuler</a>
+        </p>
+    </form>
+</body>
+</html>

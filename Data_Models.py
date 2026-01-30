@@ -118,7 +118,8 @@ class Score(Db.Model):
     Id = Db.Column(Db.Integer, primary_key=True)
     Evaluat_Id = Db.Column(Db.Integer, Db.ForeignKey('evaluats.Id'), nullable=False)
     Studnt_Id = Db.Column(Db.Integer, Db.ForeignKey('studnts.Id'), nullable=False)
-    Skill_Id = Db.Column(Db.Integer, Db.ForeignKey('skills.Id'), nullable=False)
+    # Allow Skill_Id to be nullable so comments can be attached to a student only
+    Skill_Id = Db.Column(Db.Integer, Db.ForeignKey('skills.Id'), nullable=True)
     Level_Id = Db.Column(Db.Integer, Db.ForeignKey('levels.Id'), nullable=True)
     
     # Relationships

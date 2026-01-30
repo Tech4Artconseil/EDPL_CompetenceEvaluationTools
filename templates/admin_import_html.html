@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Importer depuis HTML</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/Main_Style.css') }}">
+</head>
+<body>
+    <h1>Importer depuis une page HTML</h1>
+    <p>Upload un fichier HTML ou collez directement le code source de la page. Optionnel: renseigner une URL de base pour résoudre les URLs relatives des images.</p>
+    <form method="post" enctype="multipart/form-data">
+        <label>Fichier HTML: <input type="file" name="htmlfile" accept="text/html"></label>
+        <label>Ou coller le code source HTML:</label>
+        <textarea name="htmlsource" rows="12" style="width:90%" placeholder="Collez ici le HTML de la page..."></textarea>
+        <label>Base URL (optionnel): <input name="base_url" placeholder="https://example.com/"></label>
+        <button type="submit">Analyser</button>
+    </form>
+    <p><a href="{{ url_for('admin.admin_index') }}">Retour admin</a></p>
+</body>
+</html>

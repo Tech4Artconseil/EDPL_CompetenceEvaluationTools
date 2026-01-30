@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Admin - {{ resource }}</title>
+</head>
+<body>
+    <h1>{{ resource }}</h1>
+    <p>
+        <a href="{{ url_for('admin.create_resource', resource=resource) }}">Ajouter</a>
+        {% if resource == 'studnts' %}
+            | <a href="{{ url_for('importer.import_studnts') }}">Import CSV</a>
+            | <a href="{{ url_for('importer.import_from_html') }}">Importer depuis HTML</a>
+        {% endif %}
+        {% if resource == 'skills' %} | <a href="{{ url_for('importer.import_skills') }}">Import Skills</a> {% endif %}
+        | <a href="{{ url_for('admin.admin_index') }}">Index</a> | <a href="{{ url_for('App_Main_Dashboard') }}">Retour</a>
+    </p>
+    <table border="1" cellpadding="4">
+        <thead>
+            <tr>
+            {% for c in columns %}
+                <th>{{ c }}</th>
+            {% endfor %}
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+            <tr>
+            {% for c in columns %}
+                <td>{{ row[c] }}</td>
+            {% endfor %}
+                <td>
+                    <a href="{{ url_for('admin.edit_resource', resource=resource, item_id=row['Id']) }}">Éditer</a>
+                    <form method="post" action="{{ url_for('admin.delete_resource', resource=resource, item_id=row['Id']) }}" style="display:inline" onsubmit="return confirm('Supprimer ?');">
+                        <button type="submit">Supprimer</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

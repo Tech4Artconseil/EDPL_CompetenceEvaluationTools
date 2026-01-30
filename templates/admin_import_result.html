@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Import Résultat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/Main_Style.css') }}">
+</head>
+<body>
+    <h1>Import {{ resource }} - Résultat</h1>
+    <p>Créés: {{ created }} — Mis à jour: {{ updated }}</p>
+    {% if errors and errors|length > 0 %}
+        <h3>Erreurs:</h3>
+        <ul>
+        {% for e in errors %}
+            <li>{{ e }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+    <p><a href="{{ url_for('admin.admin_index') }}">Retour admin</a></p>
+</body>
+</html>

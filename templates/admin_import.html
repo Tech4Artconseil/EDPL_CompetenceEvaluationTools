@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Import CSV</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/Main_Style.css') }}">
+    <style>label{display:block;margin-top:8px}</style>
+</head>
+<body>
+    <h1>Import CSV{% if resource %} - {{ resource }}{% endif %}</h1>
+    <p>Upload a CSV file. Headers are case-insensitive. For students use columns: <b>Name, Email, Group</b>. For skills use: <b>Code, Descrip, SkillSet_Id</b>.</p>
+    <form method="post" enctype="multipart/form-data">
+        <label>Fichier CSV: <input type="file" name="csvfile" accept=".csv"></label>
+        <button type="submit">Importer</button>
+    </form>
+    {# Import depuis URL désactivé pour l'instant — garder uniquement CSV import #}
+    {% if resource == 'studnts' %}
+        <p>Import depuis URL désactivé. Utilisez uniquement l'upload CSV ci‑dessus.</p>
+    {% endif %}
+    <p><a href="{{ url_for('admin.admin_index') }}">Retour admin</a></p>
+</body>
+</html>

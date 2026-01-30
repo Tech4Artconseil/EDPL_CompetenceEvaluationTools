@@ -4,20 +4,65 @@ Flask application with routes and logic for student competence evaluation.
 Handles dashboard display, score updates, comments, and CSV export.
 """
 
+import os
 from flask import Flask, render_template, request, jsonify, send_file
+import re
 from Data_Models import Db, Level, Skill, Studnt, Evaluat, Score, Comment
+from admin import admin_bp
 import csv
 import io
 from datetime import datetime
 
 # Initialize Flask application
 App = Flask(__name__)
-App.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///evaluat.db'
+# Use the package's `instance` folder for the SQLite DB so Data_Init and the app agree
+PACKAGE_DIR = os.path.abspath(os.path.dirname(__file__))
+INSTANCE_DIR = os.path.join(PACKAGE_DIR, 'instance')
+os.makedirs(INSTANCE_DIR, exist_ok=True)
+DB_PATH = os.path.join(INSTANCE_DIR, 'evaluat.db')
+# Use forward slashes in the URI to avoid Windows backslash issues
+App.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH.replace('\\', '/')
 App.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 App.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
 
 # Initialize database with app
 Db.init_app(App)
+
+# Register admin blueprint
+App.register_blueprint(admin_bp)
+from import_csv import importer_bp
+App.register_blueprint(importer_bp)
+
+
+def norm_color(val: object) -> str:
+    """Normalize a color value for CSS use. Returns a hex color like '#rrggbb' or the original string.
+
+    Accepts values already in '#rrggbb' or 'rrggbb' or common color names (red, green...).
+    """
+    if not val:
+        return ''
+    s = str(val).strip()
+    sl = s.lower()
+    # common name map
+    name_map = {
+        'red': '#ff0000', 'green': '#00ff00', 'blue': '#0000ff', 'yellow': '#ffff00',
+        'white': '#ffffff', 'black': '#000000', 'grey': '#808080', 'gray': '#808080'
+    }
+    if sl in name_map:
+        return name_map[sl]
+    # already with #
+    if sl.startswith('#'):
+        if re.match(r'^#([0-9a-f]{3}|[0-9a-f]{6})$', sl):
+            if len(sl) == 4:  # expand #rgb to #rrggbb
+                return '#' + sl[1]*2 + sl[2]*2 + sl[3]*2
+            return sl
+        return sl
+    # hex without #
+    if re.match(r'^[0-9a-f]{3}$', sl):
+        return '#' + ''.join(ch*2 for ch in sl)
+    if re.match(r'^[0-9a-f]{6}$', sl):
+        return '#' + sl
+    return s
 
 
 @App.route('/')
@@ -26,11 +71,21 @@ def App_Main_Dashboard():
     Main dashboard route - displays evaluation grid.
     Shows students (rows) vs skills (columns) with level selection.
     """
-    # Get the first evaluation (we only have one initially)
-    Current_Evaluat = Evaluat.query.first()
-    
+    # Allow selecting an evaluation via query param ?evaluat_id=ID
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    Current_Evaluat = None
+    if evaluat_id:
+        Current_Evaluat = Evaluat.query.get(evaluat_id)
+
+    # If none selected, pick the first evaluation
+    if not Current_Evaluat:
+        Current_Evaluat = Evaluat.query.first()
+
     if not Current_Evaluat:
         return "No evaluation found. Please run Data_Init.py first.", 404
+
+    # Load all evaluations for the panels
+    All_Evaluats = Evaluat.query.order_by(Evaluat.CreatedAt.desc()).all()
     
     # Get all students in the evaluation's group
     All_Studnts = Studnt.query.filter_by(Group_Id=Current_Evaluat.Group_Id).order_by(Studnt.Name).all()
@@ -46,26 +101,38 @@ def App_Main_Dashboard():
     All_Scores = Score.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
     Scores_Dict = {}
     for Score_tmp in All_Scores:
-        Key = (Score_tmp.Studnt_Id, Score_tmp.Skill_Id)
+        Key = f"{Score_tmp.Studnt_Id}_{Score_tmp.Skill_Id}"
         Scores_Dict[Key] = Score_tmp
     
     # Get all comments for this evaluation
     All_Comments = Comment.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
     Comments_Dict = {}
     for Comment_tmp in All_Comments:
-        Key = (Comment_tmp.Studnt_Id, Comment_tmp.Skill_Id)
+        Key = f"{Comment_tmp.Studnt_Id}_{Comment_tmp.Skill_Id}"
         if Key not in Comments_Dict:
             Comments_Dict[Key] = []
         Comments_Dict[Key].append(Comment_tmp)
+
+    # Build a mapping of student_id -> comments for comments that are NOT tied to a skill
+    Student_Comments_Dict = {}
+    for Comment_tmp in All_Comments:
+        if Comment_tmp.Skill_Id is None:
+            sid = Comment_tmp.Studnt_Id
+            if sid not in Student_Comments_Dict:
+                Student_Comments_Dict[sid] = []
+            Student_Comments_Dict[sid].append(Comment_tmp)
     
     return render_template(
         'Eval_Dash.html',
         Evaluat=Current_Evaluat,
+        All_Evaluats=All_Evaluats,
         Studnts=All_Studnts,
         Skills=All_Skills,
         Levels=All_Levels,
         Scores_Dict=Scores_Dict,
-        Comments_Dict=Comments_Dict
+        Comments_Dict=Comments_Dict,
+        Student_Comments_Dict=Student_Comments_Dict,
+        norm_color=norm_color
     )
 
 
@@ -116,15 +183,20 @@ def App_Main_Comment_Add():
         return jsonify({'success': False, 'error': 'Comment text is required'}), 400
     
     # Create new comment
-    New_Comment = Comment(
-        Evaluat_Id=Evaluat_Id,
-        Studnt_Id=Studnt_Id,
-        Skill_Id=Skill_Id,
-        Text=Comment_Text.strip()
-    )
-    Db.session.add(New_Comment)
-    Db.session.commit()
-    
+    try:
+        New_Comment = Comment(
+            Evaluat_Id=Evaluat_Id,
+            Studnt_Id=Studnt_Id,
+            Skill_Id=Skill_Id,
+            Text=Comment_Text.strip()
+        )
+        Db.session.add(New_Comment)
+        Db.session.commit()
+    except Exception as e:
+        # Rollback and return JSON error so client-side JSON.parse won't fail
+        Db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
     return jsonify({
         'success': True,
         'comment': New_Comment.Comment_To_Dict()
@@ -159,9 +231,13 @@ def App_Main_Export_CSV():
     Export evaluation data to CSV file with semicolon separator.
     Creates a CSV with students as rows and skills as columns.
     """
-    # Get the first evaluation
-    Current_Evaluat = Evaluat.query.first()
-    
+    # Allow exporting a specific evaluation via query param ?evaluat_id=ID
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    if evaluat_id:
+        Current_Evaluat = Evaluat.query.get(evaluat_id)
+    else:
+        Current_Evaluat = Evaluat.query.first()
+
     if not Current_Evaluat:
         return "No evaluation found", 404
     

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Importer depuis URL</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/Main_Style.css') }}">
+</head>
+<body>
+    <h1>Importer étudiants depuis une URL (aperçu)</h1>
+    <p>Fournis l'URL de la page annuaire (ex: https://neocampus.lecolededesign.com/campus/annuaire?groupes=...)</p>
+    <form method="post">
+        <label>URL: <input name="url" style="width:60%" placeholder="https://example.com/..."></label>
+        <button type="submit">Récupérer et analyser (aperçu uniquement)</button>
+    </form>
+    <p><a href="{{ url_for('admin.admin_index') }}">Retour admin</a></p>
+</body>
+</html>

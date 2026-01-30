@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Résultat import HTML</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/Main_Style.css') }}">
+</head>
+<body>
+    <h1>Résultat de l'analyse</h1>
+    {% if rows and rows|length > 0 %}
+        <form method="post" action="{{ url_for('importer.import_from_html_do_import') }}">
+            <p>Sélectionnez les étudiants à importer, modifiez le nom/email si nécessaire, puis choisissez ou créez un groupe cible.</p>
+            <table border="1" cellpadding="4">
+                <thead>
+                    <tr><th></th><th>Miniature</th><th>Nom</th><th>Email</th><th>Confiance</th></tr>
+                </thead>
+                <tbody>
+                {% for r in rows %}
+                    <tr>
+                        <td><input type="checkbox" name="selected" value="{{ r.idx }}" checked></td>
+                        <td>{% if r.image %}<img src="{{ r.image }}" alt="" style="max-width:80px;max-height:80px">{% else %}<em>-</em>{% endif %}</td>
+                        <td>
+                            <input type="text" name="name_{{ r.idx }}" value="{{ r.name }}" style="width:220px">
+                        </td>
+                        <td>
+                            <input type="text" name="email_{{ r.idx }}" value="{{ r.email }}" style="width:220px">
+                        </td>
+                        <td>{{ r.score }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            <h3>Groupe cible</h3>
+            <label>Choisir un groupe existant:
+                <select name="group_id">
+                    <option value="">(aucun)</option>
+                    {% for g in groups %}
+                        <option value="{{ g.Id }}">{{ g.Name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <br>
+            <label>Ou créer un nouveau groupe: <input type="text" name="new_group" placeholder="Nom du groupe (crée si non vide)"></label>
+
+            <p><button type="submit">Importer la sélection</button> — <a href="{{ url_for('importer.import_from_html') }}">Analyser un autre fichier</a> — <a href="{{ url_for('admin.admin_index') }}">Retour admin</a></p>
+        </form>
+    {% else %}
+        <p>Aucun résultat détecté (emails, noms, images).</p>
+        <p><a href="{{ url_for('importer.import_from_html') }}">Analyser un autre fichier</a> — <a href="{{ url_for('admin.admin_index') }}">Retour admin</a></p>
+    {% endif %}
+</body>
+</html>
