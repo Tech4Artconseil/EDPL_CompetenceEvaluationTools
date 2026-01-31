@@ -12,6 +12,8 @@ from admin import admin_bp
 import csv
 import io
 from datetime import datetime
+from sheets_local import preview_mappings, fill_template, fill_student_sheets
+from Data_Models import MappingType
 try:
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill
@@ -149,6 +151,54 @@ def App_Main_Dashboard():
         Student_Notes_Dict=Student_Notes_Dict,
         norm_color=norm_color
     )
+
+
+@App.route('/evaluat/sheet/preview')
+def Evaluat_Sheet_Preview():
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    mapping_type_id = request.args.get('mapping_type_id', type=int)
+    if not evaluat_id:
+        return "evaluat_id required", 400
+    # preview either mapping type or evaluation-linked mappings (default: mapping_type if provided)
+    data = preview_mappings(evaluat_id=evaluat_id, mapping_type_id=mapping_type_id) if mapping_type_id else preview_mappings(evaluat_id=evaluat_id)
+    if 'error' in data:
+        return data['error'], 404
+    # pass available mapping types for selection
+    mapping_types = MappingType.query.order_by(MappingType.Name).all()
+    return render_template('sheet_preview.html', preview=data, mapping_types=mapping_types, selected_mapping_type=mapping_type_id)
+
+
+@App.route('/evaluat/sheet/fill', methods=['POST'])
+def Evaluat_Sheet_Fill():
+    evaluat_id = request.form.get('evaluat_id', type=int)
+    mapping_type_id = request.form.get('mapping_type_id', type=int)
+    if not evaluat_id:
+        return "evaluat_id required", 400
+    result = fill_template(evaluat_id=evaluat_id, mapping_type_id=mapping_type_id)
+    if not result.get('success'):
+        return result.get('error', 'Unknown error'), 500
+    out_path = result.get('path')
+    if not out_path or not os.path.exists(out_path):
+        return "Output file not found", 500
+    # send the file as attachment
+    return send_file(out_path, as_attachment=True, download_name=os.path.basename(out_path))
+
+
+@App.route('/evaluat/sheet/fill_simple', methods=['POST'])
+def Evaluat_Sheet_Fill_Simple():
+    evaluat_id = request.form.get('evaluat_id', type=int)
+    dry_run = request.form.get('dry_run', '0') == '1'
+    if not evaluat_id:
+        return "evaluat_id required", 400
+    result = fill_student_sheets(evaluat_id=evaluat_id, dry_run=dry_run)
+    if not result.get('success'):
+        return result.get('error', 'Unknown error'), 500
+    if dry_run:
+        return jsonify(result)
+    out_path = result.get('path')
+    if not out_path or not os.path.exists(out_path):
+        return "Output file not found", 500
+    return send_file(out_path, as_attachment=True, download_name=os.path.basename(out_path))
 
 
 

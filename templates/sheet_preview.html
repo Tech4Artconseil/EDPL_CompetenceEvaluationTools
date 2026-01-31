@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Prévisualisation du remplissage</title>
+    <style>label{display:block;margin:4px 0}</style>
+</head>
+<body>
+    <h1>Prévisualisation - {{ preview.evaluat.Name }}</h1>
+    <p>Template local: {{ preview.evaluat.Sheet_Local_Path }}</p>
+    <form method="post" action="/evaluat/sheet/fill">
+        <input type="hidden" name="evaluat_id" value="{{ preview.evaluat.Id }}">
+        <label>Type de mapping:
+            <select name="mapping_type_id">
+                <option value="">-- utiliser les mappings liés à l'évaluation --</option>
+                {% for mt in mapping_types %}
+                <option value="{{ mt.Id }}" {% if selected_mapping_type and selected_mapping_type == mt.Id %}selected{% endif %}>{{ mt.Name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <table border="1" cellpadding="6">
+            <thead>
+                <tr><th>Source</th><th>Filter</th><th>Colonne</th><th>Cible (Feuille!Cell)</th><th>Valeur Résolue</th></tr>
+            </thead>
+            <tbody>
+            {% for m in preview.mappings %}
+                <tr>
+                    <td>{{ m.mapping.Source_Table }}</td>
+                    <td>{{ m.mapping.Source_Filter or '' }}</td>
+                    <td>{{ m.mapping.Source_Column }}</td>
+                    <td>{{ m.mapping.Target_Sheet }}!{{ m.mapping.Target_Cell }}</td>
+                    <td>{{ m.value }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p>
+            <button type="submit">Remplir et télécharger le fichier XLSX</button>
+            <a href="/">Annuler</a>
+        </p>
+    </form>
+</body>
+</html>

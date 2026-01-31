@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8"><title>Importer MappingType</title></head>
+<body>
+    <h1>Importer MappingType (JSON)</h1>
+    <form method="post" enctype="multipart/form-data">
+        <label>Fichier JSON: <input type="file" name="file" accept="application/json"></label>
+        <p><button type="submit">Importer</button> <a href="{{ url_for('admin.admin_index') }}">Annuler</a></p>
+    </form>
+</body>
+</html>

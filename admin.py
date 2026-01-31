@@ -1,6 +1,12 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from Data_Models import Db, Level, Skill, StudntGrp, Studnt, Evaluat, Score, Comment, Note
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+import os
+from Data_Models import Db, Level, Skill, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType
 import re
+try:
+    from openpyxl import load_workbook
+    OPENPYXL = True
+except Exception:
+    OPENPYXL = False
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -36,6 +42,8 @@ MODEL_MAP = {
     'evaluats': Evaluat,
     'levels': Level,
     'notes': Note,
+    'sheet_mappings': SheetMapping,
+    'mapping_types': MappingType,
 }
 
 
@@ -87,6 +95,123 @@ def list_resource(resource):
     return render_template('admin_list.html', resource=resource, columns=cols, rows=rows, norm_color=norm_color)
 
 
+@admin_bp.route('/api/sheets')
+def api_sheets():
+    """Return sheet names for an evaluation's template. Query param: evaluat_id"""
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    if not evaluat_id:
+        return jsonify({'success': False, 'error': 'evaluat_id required'}), 400
+    ev = Evaluat.query.get(evaluat_id)
+    if not ev:
+        return jsonify({'success': False, 'error': 'Evaluation not found'}), 404
+    path = ev.Sheet_Local_Path
+    if not path:
+        return jsonify({'success': False, 'error': 'No template path configured for this evaluation'}), 400
+    if not os.path.isabs(path):
+        path = os.path.join(os.path.dirname(__file__), path)
+    if not os.path.exists(path):
+        return jsonify({'success': False, 'error': f'File not found: {path}'}), 404
+    if not OPENPYXL:
+        return jsonify({'success': False, 'error': 'openpyxl not available on server'}), 500
+    try:
+        wb = load_workbook(path, read_only=True, data_only=True)
+        sheets = wb.sheetnames
+        wb.close()
+        return jsonify({'success': True, 'sheets': sheets})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/api/sheet_cells')
+def api_sheet_cells():
+    """Return a small grid of used cells for a sheet. Query params: evaluat_id, sheet"""
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    sheet = request.args.get('sheet')
+    if not evaluat_id or not sheet:
+        return jsonify({'success': False, 'error': 'evaluat_id and sheet required'}), 400
+    ev = Evaluat.query.get(evaluat_id)
+    if not ev:
+        return jsonify({'success': False, 'error': 'Evaluation not found'}), 404
+    path = ev.Sheet_Local_Path
+    if not path:
+        return jsonify({'success': False, 'error': 'No template path configured for this evaluation'}), 400
+    if not os.path.isabs(path):
+        path = os.path.join(os.path.dirname(__file__), path)
+    if not os.path.exists(path):
+        return jsonify({'success': False, 'error': f'File not found: {path}'}), 404
+    if not OPENPYXL:
+        return jsonify({'success': False, 'error': 'openpyxl not available on server'}), 500
+    try:
+        wb = load_workbook(path, read_only=True, data_only=True)
+        if sheet not in wb.sheetnames:
+            wb.close()
+            return jsonify({'success': False, 'error': 'Sheet not found'}), 404
+        ws = wb[sheet]
+        cells = []
+        max_rows = min(ws.max_row, 50)
+        max_cols = min(ws.max_column, 20)
+        for r in range(1, max_rows+1):
+            row = []
+            for c in range(1, max_cols+1):
+                coord = ws.cell(row=r, column=c).coordinate
+                val = ws.cell(row=r, column=c).value
+                row.append({'coord': coord, 'value': '' if val is None else str(val)})
+            cells.append(row)
+        wb.close()
+        return jsonify({'success': True, 'cells': cells, 'max_rows': max_rows, 'max_cols': max_cols})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@admin_bp.route('/mapping_types/export/<int:mt_id>')
+def export_mapping_type(mt_id):
+    mt = MappingType.query.get_or_404(mt_id)
+    mappings = [m.To_Dict() for m in mt.sheet_mappings]
+    payload = {'mapping_type': mt.To_Dict(), 'mappings': mappings}
+    from flask import Response
+    import json
+    return Response(json.dumps(payload, ensure_ascii=False), mimetype='application/json', headers={ 'Content-Disposition': f'attachment; filename="mapping_type_{mt_id}.json"' })
+
+
+@admin_bp.route('/mapping_types/import', methods=['GET', 'POST'])
+def import_mapping_type():
+    if request.method == 'POST':
+        f = request.files.get('file')
+        if not f:
+            flash('No file uploaded', 'danger')
+            return redirect(url_for('admin.admin_index'))
+        import json
+        try:
+            data = json.load(f)
+            mt = data.get('mapping_type')
+            mappings = data.get('mappings', [])
+            if not mt:
+                flash('Invalid file', 'danger')
+                return redirect(url_for('admin.admin_index'))
+            new_mt = MappingType(Name=mt.get('Name'), Description=mt.get('Description'))
+            Db.session.add(new_mt)
+            Db.session.flush()
+            for m in mappings:
+                sm = SheetMapping(
+                    MappingType_Id=new_mt.Id,
+                    Evaluat_Id=m.get('Evaluat_Id'),
+                    Source_Table=m.get('Source_Table'),
+                    Source_Column=m.get('Source_Column'),
+                    Source_Filter=m.get('Source_Filter'),
+                    Target_Sheet=m.get('Target_Sheet'),
+                    Target_Cell=m.get('Target_Cell')
+                )
+                Db.session.add(sm)
+            Db.session.commit()
+            flash('MappingType imported', 'success')
+            return redirect(url_for('admin.list_resource', resource='mapping_types'))
+        except Exception as e:
+            Db.session.rollback()
+            flash(f'Import failed: {e}', 'danger')
+            return redirect(url_for('admin.admin_index'))
+    return render_template('admin_mapping_type_import.html')
+
+
 @admin_bp.route('/<resource>/create', methods=['GET', 'POST'])
 def create_resource(resource):
     model = MODEL_MAP.get(resource)
@@ -118,6 +243,45 @@ def create_resource(resource):
                     opts.append((str(o.Id), label))
                 choices[c] = opts
                 fk_int_fields.add(c)
+    
+    # Special-case sheet_mappings: friendlier form with dropdowns and workbook preview
+    if resource == 'sheet_mappings':
+        source_tables = ['evaluats', 'studnts', 'skills', 'notes', 'scores', 'comments']
+        table_columns = {}
+        for t in source_tables:
+            m = {'evaluats': Evaluat, 'studnts': Studnt, 'skills': Skill, 'notes': Note, 'scores': Score, 'comments': Comment}.get(t)
+            if m:
+                table_columns[t] = get_columns(m)
+        mapping_types = MappingType.query.order_by(MappingType.Name).all()
+        evaluats = Evaluat.query.order_by(Evaluat.Name).all()
+        if request.method == 'POST':
+            eval_id = request.form.get('Evaluat_Id') or None
+            mt_id = request.form.get('MappingType_Id') or None
+            src_table = request.form.get('Source_Table')
+            src_col = request.form.get('Source_Column')
+            src_filter = request.form.get('Source_Filter') or None
+            tgt_sheet = request.form.get('Target_Sheet')
+            tgt_cell = request.form.get('Target_Cell')
+            try:
+                sm = SheetMapping(
+                    Evaluat_Id=int(eval_id) if eval_id else None,
+                    MappingType_Id=int(mt_id) if mt_id else None,
+                    Source_Table=src_table,
+                    Source_Column=src_col,
+                    Source_Filter=src_filter,
+                    Target_Sheet=tgt_sheet,
+                    Target_Cell=tgt_cell
+                )
+                Db.session.add(sm)
+                Db.session.commit()
+                flash('sheet_mapping created', 'success')
+                return redirect(url_for('admin.list_resource', resource=resource))
+            except Exception as e:
+                Db.session.rollback()
+                flash(f'Error creating mapping: {e}', 'danger')
+        return render_template('admin_sheet_mapping_form.html', resource=resource, item=None, source_tables=source_tables, table_columns=table_columns, mapping_types=mapping_types, evaluats=evaluats)
+
+    # Generic handler for other resources
     if request.method == 'POST':
         data = {}
         for c in cols:
@@ -136,6 +300,17 @@ def create_resource(resource):
             else:
                 data[c] = val if val != '' else None
         new = model(**{k: data[k] for k in data})
+        # If resource is 'evaluats', validate provided Sheet_Local_Path exists (if provided)
+        if resource == 'evaluats':
+            path = data.get('Sheet_Local_Path')
+            if path:
+                check_path = path
+                if not os.path.isabs(check_path):
+                    # allow relative to package directory
+                    check_path = os.path.join(os.path.dirname(__file__), check_path)
+                if not os.path.exists(check_path):
+                    flash(f"Template file not found: {path}", 'danger')
+                    return render_template('admin_form.html', resource=resource, columns=cols, item=None, choices=choices, attr=getattr, norm_color=norm_color)
         Db.session.add(new)
         Db.session.commit()
 
@@ -272,6 +447,19 @@ def edit_resource(resource, item_id):
                     Comment.query.filter_by(Evaluat_Id=ev.Id, Studnt_Id=sc.Studnt_Id, Skill_Id=sc.Skill_Id).delete()
                     Db.session.delete(sc)
             Db.session.commit()
+
+        # validate Sheet_Local_Path on update as well
+        if resource == 'evaluats':
+            path = getattr(item, 'Sheet_Local_Path', None)
+            if path:
+                check_path = path
+                if not os.path.isabs(check_path):
+                    check_path = os.path.join(os.path.dirname(__file__), check_path)
+                if not os.path.exists(check_path):
+                    flash(f"Template file not found: {path}", 'danger')
+                    # show form again with current item
+                    Db.session.refresh(item)
+                    return render_template('admin_form.html', resource=resource, columns=cols, item=item, choices=choices, attr=getattr, norm_color=norm_color)
 
         # If the user clicked 'Appliquer', stay on the edit page after saving
         action = request.form.get('action')

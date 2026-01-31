@@ -19,6 +19,7 @@
                 <a class="btn" href="/admin/evaluats">Evaluations</a>
                 <a class="btn" href="/admin/levels">Levels</a>
                 <a class="btn" href="/admin/notes">Notes</a>
+                <a class="btn" href="/admin/sheet_mappings">Sheet Mappings</a>
             </div>
 
             <!-- Evaluation panels -->
@@ -37,6 +38,14 @@
             <div class="actions">
                 <a href="/export/csv?evaluat_id={{ Evaluat.Id }}" class="btn-export">Export CSV</a>
                 <a href="/export/xlsx?evaluat_id={{ Evaluat.Id }}" class="btn-export" style="margin-left:8px">Export XLSX</a>
+                {% if Evaluat.Sheet_Local_Path %}
+                <a href="/evaluat/sheet/preview?evaluat_id={{ Evaluat.Id }}" class="btn-export" style="margin-left:8px">Prévisualiser & Remplir le template</a>
+                <form method="post" action="/evaluat/sheet/fill_simple" target="_blank" style="display:inline; margin-left:8px">
+                    <input type="hidden" name="evaluat_id" value="{{ Evaluat.Id }}">
+                    <button class="btn-export" type="submit">Remplissage simple (télécharger)</button>
+                </form>
+                <button class="btn-export" style="margin-left:8px" onclick="dryRunFill({{ Evaluat.Id }})">Aperçu remplissage</button>
+                {% endif %}
             </div>
         </header>
 
@@ -146,6 +155,25 @@
     </div>
 
     <script>
+        function dryRunFill(evaluatId){
+            const formData = new FormData();
+            formData.append('evaluat_id', evaluatId);
+            formData.append('dry_run','1');
+            fetch('/evaluat/sheet/fill_simple', {method:'POST', body: formData})
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success){
+                        alert('Erreur: ' + (data.error || 'unknown'));
+                        return;
+                    }
+                    // Simple display of actions count
+                    const count = data.actions ? data.actions.length : 0;
+                    const out = `Aperçu: ${count} actions (ouvrir la console pour détails)`;
+                    console.log('fill_simple dry_run actions:', data.actions);
+                    alert(out);
+                })
+                .catch(err => { alert('Erreur réseau'); console.error(err); });
+        }
         // Global variables for current comment context
         let Current_Studnt_Id = null;
         let Current_Skill_Id = null; // null means student-level comment (not tied to a skill)

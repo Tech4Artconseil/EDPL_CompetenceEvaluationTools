@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Créer Mapping</title>
+    <style>
+        label{display:block;margin:6px 0}
+        table.preview{border-collapse:collapse}
+        table.preview td{border:1px solid #ccc;padding:4px;min-width:60px;text-align:left;cursor:pointer}
+        table.preview td.selected{outline:3px solid #39f}
+    </style>
+</head>
+<body>
+    <h1>Créer Sheet Mapping</h1>
+    <form method="post">
+        <label>Associer à un Evaluat (optionnel):
+            <select name="Evaluat_Id" id="evaluat_select">
+                <option value="">-</option>
+                        {% for ev in evaluats %}
+                        <option value="{{ ev.Id }}" {% if item and item.Evaluat_Id == ev.Id %}selected{% endif %}>{{ ev.Name }} ({{ ev.SkillSet_Id }})</option>
+                        {% endfor %}
+            </select>
+        </label>
+        <label>Mapping Type (optionnel):
+            <select name="MappingType_Id">
+                <option value="">-</option>
+                {% for mt in mapping_types %}
+                <option value="{{ mt.Id }}" {% if item and item.MappingType_Id == mt.Id %}selected{% endif %}>{{ mt.Name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label>Source Table:
+            <select name="Source_Table" id="source_table_select">
+                {% for t in source_tables %}
+                <option value="{{ t }}" {% if item and item.Source_Table == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Source Column:
+            <select name="Source_Column" id="source_col_select"></select>
+        </label>
+        <label>Source Filter (optionnel, syntaxe Col=Valeur):
+            <input name="Source_Filter" placeholder="Id=17 or Name='Alice'">
+        </label>
+
+        <hr>
+        <h3>Destination (choisir feuille puis cellule)</h3>
+        <label>Target Sheet:
+            <select name="Target_Sheet" id="target_sheet_select"></select>
+        </label>
+        <label>Target Cell:
+            <input name="Target_Cell" id="target_cell_input" placeholder="ex: B5">
+        </label>
+        <div id="sheet_preview_container"></div>
+
+        <p>
+            <button type="submit">Enregistrer le mapping</button>
+            <a href="{{ url_for('admin.list_resource', resource=resource) }}">Annuler</a>
+        </p>
+    </form>
+
+    <script>
+        const tableColumns = {{ table_columns|tojson|safe }};
+        const initialItem = {{ item.To_Dict()|tojson|safe if item else 'null' }};
+        const evaluatSelect = document.getElementById('evaluat_select');
+        const sourceTableSelect = document.getElementById('source_table_select');
+        const sourceColSelect = document.getElementById('source_col_select');
+        const targetSheetSelect = document.getElementById('target_sheet_select');
+        const previewContainer = document.getElementById('sheet_preview_container');
+        const targetCellInput = document.getElementById('target_cell_input');
+
+        function populateSourceCols(){
+            const t = sourceTableSelect.value;
+            const cols = tableColumns[t] || [];
+            sourceColSelect.innerHTML = '';
+            cols.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c; opt.textContent = c; sourceColSelect.appendChild(opt);
+            });
+            // set selected if editing
+            if(initialItem && initialItem.Source_Table === t){
+                sourceColSelect.value = initialItem.Source_Column;
+            }
+        }
+
+        sourceTableSelect.addEventListener('change', populateSourceCols);
+        populateSourceCols();
+
+        evaluatSelect.addEventListener('change', function(){
+            const ev = evaluatSelect.value;
+            targetSheetSelect.innerHTML = '';
+            previewContainer.innerHTML = '';
+            if(!ev) return;
+            fetch(`/admin/api/sheets?evaluat_id=${ev}`)
+                .then(r=>r.json())
+                .then(data=>{
+                    if(!data.success){ alert(data.error||'Erreur'); return; }
+                    const sheets = data.sheets;
+                    const empty = document.createElement('option'); empty.value=''; empty.textContent='-'; targetSheetSelect.appendChild(empty);
+                    sheets.forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; targetSheetSelect.appendChild(o); });
+                    // if editing and has target sheet, select it
+                    if(initialItem && initialItem.Target_Sheet){
+                        targetSheetSelect.value = initialItem.Target_Sheet;
+                        // trigger change to load preview
+                        const evt = new Event('change'); targetSheetSelect.dispatchEvent(evt);
+                    }
+                })
+                .catch(e=>{ alert('Erreur fetching sheets'); });
+        });
+
+        targetSheetSelect.addEventListener('change', function(){
+            const ev = evaluatSelect.value; const sh = targetSheetSelect.value;
+            previewContainer.innerHTML = '';
+            if(!ev || !sh) return;
+            fetch(`/admin/api/sheet_cells?evaluat_id=${ev}&sheet=${encodeURIComponent(sh)}`)
+                .then(r=>r.json())
+                .then(data=>{
+                    if(!data.success){ alert(data.error||'Erreur'); return; }
+                    renderGrid(data.cells, data.max_rows, data.max_cols);
+                })
+                .catch(e=>{ alert('Erreur fetching sheet cells'); });
+        });
+
+        function renderGrid(cells, rows, cols){
+            const table = document.createElement('table'); table.className='preview';
+            cells.forEach((r,ri)=>{
+                const tr = document.createElement('tr');
+                r.forEach((cell,ci)=>{
+                    const td = document.createElement('td');
+                    td.dataset.coord = cell.coord;
+                    td.textContent = cell.value;
+                    td.addEventListener('click', ()=>{
+                        // clear previous
+                        table.querySelectorAll('td').forEach(x=>x.classList.remove('selected'));
+                        td.classList.add('selected');
+                        targetCellInput.value = td.dataset.coord;
+                    });
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            });
+            // if editing and target cell present, mark it
+            if(initialItem && initialItem.Target_Cell){
+                // after table built, find the matching cell
+                setTimeout(()=>{
+                    const all = table.querySelectorAll('td');
+                    all.forEach(td=>{ if(td.dataset.coord === initialItem.Target_Cell){ td.classList.add('selected'); targetCellInput.value = td.dataset.coord; } });
+                }, 50);
+            }
+            previewContainer.appendChild(table);
+        }
+    </script>
+</body>
+</html>

@@ -99,6 +99,8 @@ class Evaluat(Db.Model):
     # Whether to show the optional extra column in the evaluation grid
     Show_Optional_Column = Db.Column(Db.Boolean, nullable=False, default=False)
     CreatedAt = Db.Column(Db.DateTime, default=datetime.utcnow)
+    # Local template path for the evaluation (optional)
+    Sheet_Local_Path = Db.Column(Db.String(400), nullable=True)
     
     # Relationships
     Group = Db.relationship('StudntGrp', backref='evaluats')
@@ -110,7 +112,44 @@ class Evaluat(Db.Model):
             'Name': self.Name,
             'Group_Id': self.Group_Id,
             'SkillSet_Id': self.SkillSet_Id,
-            'CreatedAt': self.CreatedAt.isoformat() if self.CreatedAt else None
+            'CreatedAt': self.CreatedAt.isoformat() if self.CreatedAt else None,
+            'Sheet_Local_Path': self.Sheet_Local_Path
+        }
+
+
+class SheetMapping(Db.Model):
+    """Maps a source value from the local DB to a target cell in an XLSX template.
+
+    Source_Table: name of the table (evaluats, studnts, skills, notes, scores, comments)
+    Source_Column: column name to read
+    Source_Filter: simple equality filter like 'Id=3' or 'Name=Bob' (optional)
+    Target_Sheet: worksheet/tab name in the XLSX
+    Target_Cell: cell reference like 'B5'
+    """
+    __tablename__ = 'sheet_mappings'
+
+    Id = Db.Column(Db.Integer, primary_key=True)
+    Evaluat_Id = Db.Column(Db.Integer, Db.ForeignKey('evaluats.Id'), nullable=True)
+    # optional mapping type (reusable group of mappings)
+    MappingType_Id = Db.Column(Db.Integer, Db.ForeignKey('mapping_types.Id'), nullable=True)
+    Source_Table = Db.Column(Db.String(50), nullable=False)
+    Source_Column = Db.Column(Db.String(100), nullable=False)
+    Source_Filter = Db.Column(Db.String(200), nullable=True)
+    Target_Sheet = Db.Column(Db.String(100), nullable=False)
+    Target_Cell = Db.Column(Db.String(20), nullable=False)
+
+    Evaluat = Db.relationship('Evaluat', backref='sheet_mappings')
+    MappingType = Db.relationship('MappingType', backref='sheet_mappings')
+
+    def To_Dict(self):
+        return {
+            'Id': self.Id,
+            'Evaluat_Id': self.Evaluat_Id,
+            'Source_Table': self.Source_Table,
+            'Source_Column': self.Source_Column,
+            'Source_Filter': self.Source_Filter,
+            'Target_Sheet': self.Target_Sheet,
+            'Target_Cell': self.Target_Cell
         }
 
 
@@ -206,3 +245,15 @@ class EvaluatNote(Db.Model):
             'Studnt_Id': self.Studnt_Id,
             'Note_Id': self.Note_Id
         }
+
+
+class MappingType(Db.Model):
+    """Reusable group/type of mappings that can be applied to fill templates."""
+    __tablename__ = 'mapping_types'
+
+    Id = Db.Column(Db.Integer, primary_key=True)
+    Name = Db.Column(Db.String(200), nullable=False)
+    Description = Db.Column(Db.Text, nullable=True)
+
+    def To_Dict(self):
+        return {'Id': self.Id, 'Name': self.Name, 'Description': self.Description}
