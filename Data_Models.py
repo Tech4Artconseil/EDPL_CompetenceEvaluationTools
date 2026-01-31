@@ -5,6 +5,7 @@ Follows strict naming conventions with truncated words and uppercase variables.
 """
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import backref
 from datetime import datetime
 
 Db = SQLAlchemy()
@@ -125,7 +126,7 @@ class Score(Db.Model):
     Level_Id = Db.Column(Db.Integer, Db.ForeignKey('levels.Id'), nullable=True)
     
     # Relationships
-    Evaluat = Db.relationship('Evaluat', backref='scores')
+    Evaluat = Db.relationship('Evaluat', backref=backref('scores', cascade='all, delete-orphan'))
     Studnt = Db.relationship('Studnt', backref='scores')
     Skill = Db.relationship('Skill', backref='scores')
     Level = Db.relationship('Level', backref='scores')
@@ -153,7 +154,7 @@ class Comment(Db.Model):
     CreatedAt = Db.Column(Db.DateTime, default=datetime.utcnow)
     
     # Relationships
-    Evaluat = Db.relationship('Evaluat', backref='comments')
+    Evaluat = Db.relationship('Evaluat', backref=backref('comments', cascade='all, delete-orphan'))
     Studnt = Db.relationship('Studnt', backref='comments')
     Skill = Db.relationship('Skill', backref='comments')
     
@@ -194,7 +195,7 @@ class EvaluatNote(Db.Model):
     Studnt_Id = Db.Column(Db.Integer, Db.ForeignKey('studnts.Id'), nullable=False)
     Note_Id = Db.Column(Db.Integer, Db.ForeignKey('notes.Id'), nullable=False)
 
-    Evaluat = Db.relationship('Evaluat', backref='evaluat_notes')
+    Evaluat = Db.relationship('Evaluat', backref=backref('evaluat_notes', cascade='all, delete-orphan'))
     Studnt = Db.relationship('Studnt', backref='evaluat_notes')
     Note = Db.relationship('Note', backref='evaluat_notes')
 

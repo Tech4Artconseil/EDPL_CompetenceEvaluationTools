@@ -69,6 +69,21 @@ def list_resource(resource):
     for it in items:
         row = {c: getattr(it, c) for c in cols}
         rows.append(row)
+    # Replace foreign-key id columns (ending with _Id) with a readable label when possible
+    for row in rows:
+        for c in list(row.keys()):
+            if c.endswith('_Id') and row.get(c) is not None:
+                ref = c[:-3]
+                ref_model = REF_MODELS.get(ref)
+                if ref_model:
+                    try:
+                        obj = ref_model.query.get(int(row[c]))
+                        if obj:
+                            label = getattr(obj, 'Name', None) or getattr(obj, 'Code', None) or str(getattr(obj, 'Id'))
+                            row[c] = label
+                    except Exception:
+                        # leave original id if anything goes wrong
+                        pass
     return render_template('admin_list.html', resource=resource, columns=cols, rows=rows, norm_color=norm_color)
 
 
