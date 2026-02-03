@@ -95,53 +95,133 @@ EDPL_CompetenceEvaluationTools/
 
 ## Database Schema
 
-The application uses SQLite with the following models:
+# Student Competence Evaluation Tool
 
-- **Level**: Evaluation levels with percentages and colors
-- **Skill**: Competencies to be evaluated
-- **StudntGrp**: Student groups
-- **Studnt**: Individual students
-- **Evaluat**: Evaluation sessions
-- **Score**: Student scores for each skill
-- **Comment**: Comments on student/skill combinations
+Application web (Flask) pour évaluer des étudiants selon des compétences et des niveaux.
+Ce dépôt fournit : interface de saisie, API AJAX, import/export CSV/XLSX, gestion admin et outils de remplissage de modèles Excel.
 
-## Naming Conventions
+## Fonctionnalités principales
 
-The code follows strict naming conventions:
-- Words > 10 characters are truncated (e.g., 'Evaluation' → 'Evaluat')
-- Variables start with uppercase (e.g., `StudntList`)
-- Functions include parent class name with underscores (e.g., `Studnt_Update_Score`)
-- Loop variables are suffixed with `_tmp` (e.g., `for Stud_tmp in Stud_List:`)
+- Tableau de bord interactif : étudiants (lignes) × compétences (colonnes) avec sélection de niveau
+- Système de niveaux (ex. 20 / 50 / 75 / 100) avec couleur associée et description
+- Gestion des commentaires par étudiant / compétence (API pour lister/ajouter)
+- Gestion de `Note` (valeurs numériques) et affectation par étudiant pour une colonne optionnelle
+- Import d'étudiants et de compétences : CSV (aperçu + confirmation), extraction depuis HTML ou URL (heuristiques de matching noms/images/emails)
+- Administration CRUD (ressources : skills, studnts, evaluats, levels, notes, mapping_types, sheet_mappings)
+- Remplissage de templates XLSX et génération de feuilles par étudiant (dry-run disponible) via `sheets_local.py`
+- Export CSV (séparateur `;`) et export XLSX coloré (nécessite `openpyxl`)
+- Scripts utilitaires dans `scripts/` (migrations, contrôles, etc.)
 
-## Technology Stack
+## Installation
 
-- **Backend**: Flask 3.0.0
-- **Database**: SQLite with SQLAlchemy 2.0.23
-- **Frontend**: HTML5, CSS3, JavaScript (Vanilla)
-- **Styling**: Custom CSS with responsive design
+### Prérequis
 
-## Development
+- Python 3.8+
+- pip
 
-To modify the prepopulated data, edit the `Data_Init.py` file and re-run it:
+Certaines fonctionnalités optionnelles nécessitent :
+- `openpyxl` (export/fill XLSX)
+- `beautifulsoup4` (import depuis HTML)
+- `requests` (import depuis URL)
+
+Installer dépendances :
+
+```bash
+pip install -r requirements.txt
+```
+
+## Initialisation des données
+
+Pour prépeupler la base :
 
 ```bash
 python Data_Init.py
 ```
 
-Note: The script will skip initialization if data already exists. Delete `instance/evaluat.db` to reset the database.
+Le script crée un jeu d'exemple (niveaux, compétences, groupe d'étudiants, évaluation et lignes `Score`).
+Si la base existe déjà, le script ne dupliquera pas les données.
 
-## Screenshots
+Pour réinitialiser manuellement : supprimer `instance/evaluat.db` puis relancer `Data_Init.py`.
 
-### Dashboard with Color-Coded Levels
-![Dashboard](https://github.com/user-attachments/assets/283ff1f6-6b6e-4717-a765-4b64ea9b6caf)
+## Lancer l'application
 
-### Comment System
-![Comments](https://github.com/user-attachments/assets/fd9ee888-73f3-49d0-9132-451b32594bdf)
+```bash
+python App_Main.py
+```
 
-## License
+Par défaut : http://localhost:5000
 
-This project is licensed under the GNU GENERAL PUBLIC LICENSE  - see the LICENSE file for details.
+## Usage (résumé)
+
+- Évaluer : sélectionner un niveau dans la cellule — sauvegarde via AJAX
+- Commenter : ouvrir le modal depuis la cellule et ajouter un texte
+- Exporter : `Export CSV` (séparateur `;`) ou `Export XLSX` (couleurs requièrent `openpyxl`)
+- Importer : via l'admin → Import (CSV / HTML / URL) — utiliser l'aperçu puis confirmer l'import
+- Remplir templates XLSX : depuis l'admin ou le tableau de bord, preview puis génération
+
+## Structure du projet (fichiers importants)
+
+```
+EDPL_CompetenceEvaluationTools/
+├── App_Main.py
+├── admin.py
+├── import_csv.py
+├── Data_Init.py
+├── Data_Models.py
+├── sheets_local.py
+├── requirements.txt
+├── templates/
+├── static/
+├── scripts/
+└── instance/ (evaluat.db et backups)
+```
+
+## Schéma de la base de données (modèles)
+
+Les tables principales implémentées dans `Data_Models.py` :
+
+- `Level` (niveaux, pourcentage, couleur, description)
+- `Skill` (compétence : SkillSet_Id, Code, Descrip)
+- `StudntGrp` (groupes d'étudiants)
+- `Studnt` (étudiants : Name, Email, Group_Id)
+- `Evaluat` (séances d'évaluation : Group_Id, SkillSet_Id, Sheet_Local_Path...)
+- `Score` (ligne par étudiant × compétence pour une évaluation)
+- `Comment` (commentaires)
+- `Note` (valeurs numériques utilisables pour une colonne optionnelle)
+- `EvaluatNote` (association Note ↔ étudiant pour une évaluation)
+- `SheetMapping` / `MappingType` (mappings réutilisables pour remplissage XLSX)
+
+Remarque importante : le code client/serveur gère des commentaires pouvant être liés uniquement à un étudiant (sans `Skill_Id`), mais le modèle `Comment` dans `Data_Models.py` déclare `Skill_Id` comme `nullable=False`. Il existe donc une incohérence potentielle entre le modèle et certains usages du code — vérifier/adapter `Comment.Skill_Id` si vous souhaitez autoriser des commentaires « généraux » par étudiant.
+
+## Dépendances optionnelles
+
+- `openpyxl` : export et remplissage XLSX
+- `beautifulsoup4` : import depuis HTML
+- `requests` : import depuis URL
+
+Ces paquets figurent dans `requirements.txt` mais peuvent être facultatifs selon l'usage.
+
+## Scripts utiles
+
+- `check_db.py` : affichage des tables SQLite
+- `check_evaluat_scores.py` : vérifie que le nombre d'entrées `scores` correspond à `students × skills` pour une évaluation
+- `scripts/` : migrations et outils d'administration supplémentaires
+
+## Conventions de nommage
+
+Le code contient quelques conventions (variables et noms abrégés), mais elles ne sont pas appliquées de façon strictement homogène dans tout le projet. Le README ne présente donc plus de règles très contraignantes ; se référer au code pour les cas concrets.
+
+## Licence
+
+GNU GENERAL PUBLIC LICENSE — voir le fichier `LICENSE`.
 
 ## Support
 
-For issues or questions, please open an issue on the GitHub repository.
+Ouvrez une issue sur le dépôt pour signaler un bug ou demander une fonctionnalité.
+
+---
+
+Si vous voulez, je peux :
+- corriger `Data_Models.py` pour autoriser `Comment.Skill_Id = NULL` (ou)
+- modifier le code pour toujours fournir une valeur `Skill_Id` aux commentaires.
+Dites-moi quelle option vous préférez et j'appliquerai le changement.
