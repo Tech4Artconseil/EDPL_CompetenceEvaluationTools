@@ -71,8 +71,18 @@
                     {% for Studnt_tmp in Studnts %}
                     <tr>
                         <td class="student-cell">
-                            <div class="student-name">{{ Studnt_tmp.Name }}</div>
-                            <div class="student-email">{{ Studnt_tmp.Email }}</div>
+                            <div class="student-info">
+                                {% if Studnt_tmp.Photo_Url %}
+                                <img src="{{ Studnt_tmp.Photo_Url }}" alt="" class="student-photo" aria-hidden="true">
+                                {% else %}
+                                <img src="" alt="" class="student-photo" style="display:none" aria-hidden="true">
+                                {% endif %}
+                                <div class="student-photo placeholder" aria-hidden="true"></div>
+                                <div class="student-meta">
+                                    <div class="student-name">{{ Studnt_tmp.Name }}</div>
+                                    <div class="student-email">{{ Studnt_tmp.Email }}</div>
+                                </div>
+                            </div>
                         </td>
                         {% for Skill_tmp in Skills %}
                         {% set Key = Studnt_tmp.Id ~ '_' ~ Skill_tmp.Id %}
@@ -419,6 +429,43 @@
                 alert('Erreur réseau lors de la sauvegarde de la note optionnelle');
             });
         }
+    </script>
+    <script>
+        // Hide student name when photo is missing (broken or placeholder)
+        document.addEventListener('DOMContentLoaded', function(){
+            document.querySelectorAll('.student-info').forEach(function(info){
+                var img = info.querySelector('img.student-photo');
+                var cell = info.closest('.student-cell');
+                if (!cell) return;
+                if (!img){
+                    cell.classList.add('no-photo');
+                    return;
+                }
+                var src = img.getAttribute('src') || '';
+                if (!src.trim()){
+                    cell.classList.add('no-photo');
+                    return;
+                }
+                // If already complete, check dimensions
+                if (img.complete){
+                    if (img.naturalWidth === 0){
+                        cell.classList.add('no-photo');
+                    } else {
+                        cell.classList.remove('no-photo');
+                    }
+                }
+                img.addEventListener('error', function(){
+                    cell.classList.add('no-photo');
+                });
+                img.addEventListener('load', function(){
+                    if (img.naturalWidth && img.naturalWidth > 0){
+                        cell.classList.remove('no-photo');
+                    } else {
+                        cell.classList.add('no-photo');
+                    }
+                });
+            });
+        });
     </script>
 </body>
 </html>

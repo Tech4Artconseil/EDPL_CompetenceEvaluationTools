@@ -73,6 +73,7 @@ class Studnt(Db.Model):
     Id = Db.Column(Db.Integer, primary_key=True)
     Name = Db.Column(Db.String(100), nullable=False)  # e.g., Étudiant 17
     Email = Db.Column(Db.String(100), nullable=False)
+    Photo_Url = Db.Column(Db.String(400), nullable=True)  # external URL to student's photo (jpg)
     Group_Id = Db.Column(Db.Integer, Db.ForeignKey('studnt_grps.Id'), nullable=False)
     
     # Relationship to group
@@ -83,6 +84,7 @@ class Studnt(Db.Model):
         return {
             'Id': self.Id,
             'Name': self.Name,
+            'Photo_Url': self.Photo_Url,
             'Email': self.Email,
             'Group_Id': self.Group_Id
         }

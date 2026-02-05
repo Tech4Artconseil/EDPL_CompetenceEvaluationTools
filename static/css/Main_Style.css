@@ -177,6 +177,44 @@ body {
     color: #7f8c8d;
 }
 
+/* Student photo and layout */
+.student-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.student-photo {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: 0 0 48px;
+    background-color: #bdc3c7;
+    border: 2px solid #fff;
+}
+.student-photo.placeholder {
+    display: none; /* hidden by default; shown when .no-photo */
+    background-color: #bdc3c7;
+}
+
+/* When no photo, hide the img and show the placeholder gray circle */
+.student-cell.no-photo img.student-photo {
+    display: none !important;
+}
+.student-cell.no-photo .student-photo.placeholder {
+    display: inline-block !important;
+}
+.student-meta {
+    display: flex;
+    flex-direction: column;
+}
+
+/* When photo missing, hide student name to 'disable' it */
+.student-cell.no-photo .student-name {
+    display: auto ;
+    visibility:  yes ;
+}
+
 /* Evaluation cell */
 .eval-cell {
     /* constrain evaluation cells so many columns fit horizontally */

@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 import os
 from Data_Models import Db, Level, Skill, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType
+from image_fetcher import name_parts, fetch_photo_url
 import re
 try:
     from openpyxl import load_workbook
@@ -314,6 +315,17 @@ def create_resource(resource):
         Db.session.add(new)
         Db.session.commit()
 
+        # Try to auto-fill student's photo URL from trombi if available
+        if resource == 'studnts':
+            try:
+                first, last = name_parts(new.Name)
+                url = fetch_photo_url(first, last)
+                if url:
+                    new.Photo_Url = url
+                    Db.session.commit()
+            except Exception:
+                Db.session.rollback()
+
         # If a new student is created, ensure Score entries exist for existing evaluations
         if resource == 'studnts':
             # find evaluations for this student's group
@@ -425,6 +437,16 @@ def edit_resource(resource, item_id):
                         s = Score(Evaluat_Id=ev.Id, Studnt_Id=stud.Id, Skill_Id=sk.Id, Level_Id=None)
                         Db.session.add(s)
             Db.session.commit()
+            # If student has no photo URL, try to fetch from trombi
+            try:
+                if not getattr(stud, 'Photo_Url', None):
+                    first, last = name_parts(stud.Name)
+                    url = fetch_photo_url(first, last)
+                    if url:
+                        stud.Photo_Url = url
+                        Db.session.commit()
+            except Exception:
+                Db.session.rollback()
 
         # If editing an evaluation, sync Score entries: add missing and remove obsolete
         if resource == 'evaluats':

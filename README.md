@@ -76,6 +76,17 @@ The application will be available at: `http://localhost:5000`
 
 Click the "Export CSV" button to download evaluation results as a CSV file with semicolon separators.
 
+### Photos des étudiants
+
+- **Champ en base** : les URL des photos sont stockées dans le champ `Photo_Url` de la table `studnts`.
+- **Convention de nommage** : l'application génère des candidats d'URL selon la règle "initiale du prénom + nom" normalisés (minuscules, sans accents ni caractères spéciales). Exemple : "Masa BAKIR" → `mbakir.jpg` (URL complète : `https://neocampus.lecolededesign.com/uploads/trombi/mbakir.jpg`).
+- **Scripts disponibles** :
+  - `scripts/fill_photo_urls_backup.py` : crée une sauvegarde de la base (`instance/evaluat.db.bak.<ts>`) puis remplit `Photo_Url` en masse (par défaut n'écrase pas les valeurs existantes ; utiliser `--force` pour forcer l'écrasement).
+  - `scripts/import_students_from_names.py` : importer des étudiants depuis un CSV (`Name`, optionnel `Email`, `Group`) et générer `Photo_Url` (option `--verify` pour vérifier l'existence distante).
+  - `image_fetcher.py` : utilitaires de normalisation / génération de candidats et vérification HTTP.
+- **Comportement UI** : si l'image est absente ou si le chargement renvoie une erreur, l'interface affiche un cercle gris (placeholder) et cache le nom de l'étudiant dans la grille pour éviter l'affichage d'un texte alternatif. Ceci est géré côté CSS/JS pour préserver la mise en page.
+- **Respect & sécurité** : avant d'utiliser les scripts de collecte, vérifiez les conditions d'utilisation du site et la conformité RGPD / vie privée. Utilisez un compte autorisé ou une API si disponible.
+
 ## Project Structure
 
 ```
@@ -183,7 +194,7 @@ Les tables principales implémentées dans `Data_Models.py` :
 - `Level` (niveaux, pourcentage, couleur, description)
 - `Skill` (compétence : SkillSet_Id, Code, Descrip)
 - `StudntGrp` (groupes d'étudiants)
-- `Studnt` (étudiants : Name, Email, Group_Id)
+ - `Studnt` (étudiants : Name, Email, Photo_Url, Group_Id)
 - `Evaluat` (séances d'évaluation : Group_Id, SkillSet_Id, Sheet_Local_Path...)
 - `Score` (ligne par étudiant × compétence pour une évaluation)
 - `Comment` (commentaires)
