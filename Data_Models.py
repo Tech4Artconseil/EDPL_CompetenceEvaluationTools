@@ -37,7 +37,7 @@ class Skill(Db.Model):
     __tablename__ = 'skills'
     
     Id = Db.Column(Db.Integer, primary_key=True)
-    SkillSet_Id = Db.Column(Db.String(50), nullable=False)  # e.g., DNMADE3_18.3
+    SkillSet_Id = Db.Column(Db.Integer, Db.ForeignKey('skill_sets.Id'), nullable=False)
     Code = Db.Column(Db.String(20), nullable=False)  # e.g., C1.1
     Descrip = Db.Column(Db.String(200), nullable=False)  # Description truncated
     
@@ -48,6 +48,20 @@ class Skill(Db.Model):
             'SkillSet_Id': self.SkillSet_Id,
             'Code': self.Code,
             'Descrip': self.Descrip
+        }
+
+
+class SkillSet(Db.Model):
+    """SkillSet model - groups skills under a named set"""
+    __tablename__ = 'skill_sets'
+
+    Id = Db.Column(Db.Integer, primary_key=True)
+    Name = Db.Column(Db.String(100), unique=True, nullable=False)
+
+    def SkillSet_To_Dict(self):
+        return {
+            'Id': self.Id,
+            'Name': self.Name
         }
 
 
@@ -97,7 +111,7 @@ class Evaluat(Db.Model):
     Id = Db.Column(Db.Integer, primary_key=True)
     Name = Db.Column(Db.String(200), nullable=False)
     Group_Id = Db.Column(Db.Integer, Db.ForeignKey('studnt_grps.Id'), nullable=False)
-    SkillSet_Id = Db.Column(Db.String(50), nullable=False)
+    SkillSet_Id = Db.Column(Db.Integer, Db.ForeignKey('skill_sets.Id'), nullable=False)
     # Whether to show the optional extra column in the evaluation grid
     Show_Optional_Column = Db.Column(Db.Boolean, nullable=False, default=False)
     CreatedAt = Db.Column(Db.DateTime, default=datetime.utcnow)

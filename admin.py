@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 import os
-from Data_Models import Db, Level, Skill, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType
+from Data_Models import Db, Level, Skill, SkillSet, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType
 from image_fetcher import name_parts, fetch_photo_url
 import re
 try:
@@ -38,6 +38,7 @@ def norm_color(val: object) -> str:
 # Map simple resource names to model classes
 MODEL_MAP = {
     'skills': Skill,
+    'skill_sets': SkillSet,
     'studnt_grps': StudntGrp,
     'studnts': Studnt,
     'evaluats': Evaluat,
@@ -56,6 +57,7 @@ REF_MODELS = {
     'Studnt': Studnt,
     'Group': StudntGrp,
     'Skill': Skill,
+    'SkillSet': SkillSet,
     'Evaluat': Evaluat,
     'Level': Level,
     'Note': Note,
@@ -225,15 +227,15 @@ def create_resource(resource):
     for c in cols:
         if c.endswith('_Id'):
             ref = c[:-3]  # remove trailing _Id
-            # Special case: SkillSet_Id is a string field referencing Skill.SkillSet_Id values
+            # Special case: SkillSet references the new SkillSet model
             if ref == 'SkillSet':
                 opts = []
-                rows = Db.session.query(Skill.SkillSet_Id).distinct().all()
-                for r in rows:
-                    if r and r[0] is not None:
-                        opts.append((r[0], r[0]))
+                for ss in SkillSet.query.order_by(SkillSet.Name).all():
+                    opts.append((str(ss.Id), ss.Name))
                 if opts:
                     choices[c] = opts
+                    fk_int_fields.add(c)
+                # allow free text if no existing skill sets
                 continue
 
             ref_model = REF_MODELS.get(ref)
@@ -300,11 +302,21 @@ def create_resource(resource):
                     data[c] = None
             else:
                 data[c] = val if val != '' else None
+        # If SkillSet_Id was entered as a free text name (no existing choices),
+        # create a SkillSet record and replace the value with its id.
+        if 'SkillSet_Id' in data and data.get('SkillSet_Id'):
+            ss_val = data.get('SkillSet_Id')
+            # if it's numeric (coming from select) it is already int; if string non-numeric, create SkillSet
+            if isinstance(ss_val, str) and not ss_val.isdigit():
+                # create new SkillSet
+                ss = SkillSet.query.filter_by(Name=ss_val).first()
+                if not ss:
+                    ss = SkillSet(Name=ss_val)
+                    Db.session.add(ss)
+                    Db.session.flush()
+                data['SkillSet_Id'] = ss.Id
+
         new = model(**{k: data[k] for k in data})
-        # validation: Skill must have a SkillSet_Id
-        if resource == 'skills' and not data.get('SkillSet_Id'):
-            flash('SkillSet_Id is required for a skill', 'danger')
-            return render_template('admin_form.html', resource=resource, columns=cols, item=None, choices=choices, attr=getattr, norm_color=norm_color)
         # If resource is 'evaluats', validate provided Sheet_Local_Path exists (if provided)
         if resource == 'evaluats':
             path = data.get('Sheet_Local_Path')
@@ -390,12 +402,11 @@ def edit_resource(resource, item_id):
             ref = c[:-3]
             if ref == 'SkillSet':
                 opts = []
-                rows = Db.session.query(Skill.SkillSet_Id).distinct().all()
-                for r in rows:
-                    if r and r[0] is not None:
-                        opts.append((r[0], r[0]))
+                for ss in SkillSet.query.order_by(SkillSet.Name).all():
+                    opts.append((str(ss.Id), ss.Name))
                 if opts:
                     choices[c] = opts
+                    fk_int_fields.add(c)
                 continue
 
             ref_model = REF_MODELS.get(ref)
