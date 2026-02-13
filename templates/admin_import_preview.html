@@ -38,7 +38,7 @@
         <p>Voici les lignes détectées (vous pouvez modifier les valeurs si nécessaire avant confirmation) :</p>
         <table>
             <thead>
-                <tr><th>#</th><th>Name</th><th>Email</th><th>Group (CSV)</th></tr>
+                <tr><th>#</th><th>Name</th><th>Email</th><th>Group (CSV)</th><th>Photo URL (col D)</th></tr>
             </thead>
             <tbody>
                 {% for row in rows %}
@@ -52,6 +52,9 @@
                     </td>
                     <td>
                         <input type="text" name="row_{{ loop.index0 }}_group" value="{{ row.group }}" style="width:100%">
+                    </td>
+                    <td>
+                        <input type="text" name="row_{{ loop.index0 }}_photo" value="{{ row.photo or '' }}" style="width:100%">
                     </td>
                 </tr>
                 {% endfor %}
