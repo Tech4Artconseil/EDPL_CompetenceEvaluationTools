@@ -16,9 +16,13 @@
         {% if resource == 'skills' %} | <a href="{{ url_for('importer.import_skills') }}">Import Skills</a> {% endif %}
         | <a href="{{ url_for('admin.admin_index') }}">Index</a> | <a href="{{ url_for('App_Main_Dashboard') }}">Retour</a>
     </p>
+
     <table border="1" cellpadding="4">
         <thead>
             <tr>
+            {% if resource == 'studnts' %}
+                <th><input type="checkbox" id="select_all" onclick="toggleAll(this)"></th>
+            {% endif %}
             {% for c in columns %}
                 <th>{{ c }}</th>
             {% endfor %}
@@ -28,6 +32,9 @@
         <tbody>
         {% for row in rows %}
             <tr>
+            {% if resource == 'studnts' %}
+                <td><input type="checkbox" name="selected_ids" value="{{ row['Id'] }}" form="bulk_form"></td>
+            {% endif %}
             {% for c in columns %}
                 <td>{{ row[c] }}</td>
             {% endfor %}
@@ -44,5 +51,47 @@
         {% endfor %}
         </tbody>
     </table>
+
+    {% if resource == 'studnts' %}
+    <form id="bulk_form" method="post" action="{{ url_for('admin.studnts_bulk_action') }}" onsubmit="return confirmBulk();">
+        <label for="action">Action :</label>
+        <select name="action" id="action" onchange="actionChanged()">
+            <option value="">--Choisir--</option>
+            <option value="delete">Supprimer</option>
+            <option value="change_group">Changer de groupe</option>
+        </select>
+        <label for="target_group_id">Groupe cible :</label>
+        <select name="target_group_id" id="target_group_id" style="display:none">
+            <option value="">--Choisir groupe--</option>
+            {% for g in groups %}
+                <option value="{{ g.Id }}">{{ g.Name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Appliquer</button>
+    </form>
+
+    <script>
+    function toggleAll(cb) {
+        var checks = document.querySelectorAll('input[name="selected_ids"]');
+        for (var i = 0; i < checks.length; i++) checks[i].checked = cb.checked;
+    }
+    function actionChanged() {
+        var a = document.getElementById('action').value;
+        var tg = document.getElementById('target_group_id');
+        if (a === 'change_group') tg.style.display = '';
+        else tg.style.display = 'none';
+    }
+    function confirmBulk(){
+        var a = document.getElementById('action').value;
+        if (!a){ alert('Choisir une action'); return false; }
+        if (a === 'change_group'){
+            var tg = document.getElementById('target_group_id').value;
+            if (!tg){ alert('Choisir un groupe cible'); return false; }
+        }
+        return confirm('Confirmer l\'action sur les éléments sélectionnés ?');
+    }
+    </script>
+    {% endif %}
+
 </body>
 </html>

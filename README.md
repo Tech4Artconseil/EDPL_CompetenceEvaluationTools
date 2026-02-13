@@ -170,6 +170,48 @@ Par défaut : http://localhost:5000
 - Importer : via l'admin → Import (CSV / HTML / URL) — utiliser l'aperçu puis confirmer l'import
 - Remplir templates XLSX : depuis l'admin ou le tableau de bord, preview puis génération
 
+## Import CSV — format attendu (étudiants avec photo Data-URI ou URI)
+
+Pour importer des étudiants avec une photo incluse dans le CSV (data-URI) ou une URL, suivez ces règles strictes :
+
+- Séparateur : virgule (`,`). N'utilisez pas le point‑virgule pour l'import des étudiants.
+- Pas de ligne d'entête : le fichier doit contenir uniquement des lignes de données.
+- Ordre des colonnes (fixe) : `Name,Email,Group,Photo`
+  - `Name` : nom complet de l'étudiant (obligatoire)
+  - `Email` : adresse e‑mail (si invalide ou vide, un e‑mail synthétique sera généré)
+  - `Group` : identifiant ou nom du groupe cible (optionnel)
+  - `Photo` : chaîne représentant soit :
+    - un data-URI d'image au format `data:image/<type>;base64,<payload>` (ex. `data:image/jpeg;base64,...`) OU
+    - une URL HTTP/HTTPS pointant vers l'image (ex. `https://.../trombi/nom.jpg`).
+
+Recommandations et validations :
+
+- Si la colonne `Photo` contient un data-URI, la valeur DOIT être entourée de guillemets doubles `"..."` dans le CSV (pour protéger le long contenu base64 contenant des virgules/newlines).
+- L'importateur nettoie automatiquement les espaces, sauts de ligne, convertit les variantes base64url et ajoute le padding manquant (`=`) si nécessaire.
+- Les data-URI sont décodés et les images sont sauvegardées dans `static/uploads/trombi/` ; la base de données stocke ensuite le chemin web `/static/uploads/trombi/<fichier>`.
+- Si Pillow est installé, l'image est validée et ré-encodée via Pillow pour éviter les artefacts. Sinon, l'octet décodé est écrit tel quel.
+- Si la colonne `Photo` contient une URL (`http://` ou `https://`), elle est conservée telle quelle et stockée dans `Photo_Url`.
+
+Conseils pratiques :
+
+- Générer votre CSV avec un script ou un éditeur qui quote automatiquement le champ `Photo` (ex. `"data:image/jpeg;base64,..."`).
+- Vérifier le fichier avec un éditeur texte que la colonne `Photo` est bien sur une seule cellule et correctement délimitée.
+- En cas d'erreur, l'aperçu d'import affichera des messages détaillés et des logs `[IMPORT_CSV]` côté serveur pour déboguer le décodage.
+
+Exemple de ligne (sans entête) :
+
+```
+Jean Dupont,jean.dupont@example.com,GroupeA,"data:image/jpeg;base64,/9j/4AAQSkZJRgAB..."
+```
+
+L'import CSV supporte aussi les valeurs `Photo` qui sont des URLs :
+
+```
+Marie Claire,marie.claire@example.com,GroupeB,https://example.com/uploads/trombi/mclaire.jpg
+```
+
+Si vous souhaitez un assistant pour convertir un grand CSV (par ex. ajouter automatiquement les guillemets autour du champ Photo), je peux ajouter un petit script utilitaire dans `scripts/`.
+
 ## Structure du projet (fichiers importants)
 
 ```

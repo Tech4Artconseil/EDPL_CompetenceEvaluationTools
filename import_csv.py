@@ -25,7 +25,20 @@ import time
 import base64
 # Blueprint for importer routes
 from flask import Blueprint as _Blueprint
+try:
+    from .photo_utils import _get_photo_type, _debug_save_data_uri, _save_data_uri_to_file
+except Exception:
+    # support importing import_csv as a top-level module during testing
+    from photo_utils import _get_photo_type, _debug_save_data_uri, _save_data_uri_to_file
 importer_bp = _Blueprint('importer', __name__, url_prefix='/admin/import')
+
+def _debug_preview_photo(line_no, photo_val):
+    try:
+        pv = photo_val if photo_val is not None else ''
+        print(f"[IMPORT_CSV] preview line {line_no} photo raw repr: {repr(pv)} length={len(pv)} -> _get_photo_type={_get_photo_type(pv)}")
+    except Exception as e:
+        print('[IMPORT_CSV] preview debug failed:', repr(e))
+
 @importer_bp.route('/studnts', methods=['GET', 'POST'])
 def import_studnts():
     if request.method == 'POST':
@@ -76,7 +89,7 @@ def import_studnts():
 
                 # If the CSV contains a data-URI image, decode and save it as a file
                 if photo_val and photo_val.lower().startswith('data:image/'):
-                    saved = _save_data_uri_to_file(photo_val)
+                    saved = _debug_save_data_uri(photo_val, student_name=name)
                     if saved:
                         photo_val = saved
                     else:
@@ -174,13 +187,15 @@ def import_studnts():
                     photo_val = h.get('photo') or h.get('photo_url') or h.get('photourl') or h.get('image') or h.get('image_url') or ''
                     if not name:
                         errors.append(f'Line {i}: missing name')
-                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': ''})
+                        _debug_preview_photo(i, '')
+                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': '', 'photo_type': _get_photo_type('')})
                         continue
                     # validate email or generate synthetic one
                     if not _is_valid_email(email):
                         email = _generate_email_from_name(name, suffix=str(i))
 
-                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip()})
+                    _debug_preview_photo(i, photo_val)
+                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip(), 'photo_type': _get_photo_type(photo_val)})
             except csv.Error:
                 # fallback: parse raw text lines manually using chosen delimiter
                 stream2 = io.StringIO(text)
@@ -190,7 +205,8 @@ def import_studnts():
                     cols = [c.strip() for c in line.split(delimiter)]
                     if len(cols) < 2:
                         errors.append(f'Line {i}: not enough columns')
-                        preview_rows.append({'name': '', 'email': '', 'group': '', 'photo': ''})
+                        _debug_preview_photo(i, '')
+                        preview_rows.append({'name': '', 'email': '', 'group': '', 'photo': '', 'photo_type': _get_photo_type('')})
                         continue
                     name = cols[0]
                     email = cols[1]
@@ -201,12 +217,13 @@ def import_studnts():
                         photo_val = photo_val[1:-1]
                     if not name:
                         errors.append(f'Line {i}: missing name')
-                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': ''})
+                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': '', 'photo_type': _get_photo_type('')})
                         continue
                     email = (email or '').strip()
                     if not _is_valid_email(email):
                         email = _generate_email_from_name(name, suffix=str(i))
-                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip()})
+                    _debug_preview_photo(i, photo_val)
+                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip(), 'photo_type': _get_photo_type(photo_val)})
         else:
             # No header: parse rows by position. Accept 2-4 columns: Name;Email;Group;Photo
             # Use csv.reader but fallback to manual parsing on csv.Error (unquoted newlines etc.)
@@ -230,13 +247,15 @@ def import_studnts():
 
                     if not name:
                         errors.append(f'Line {i}: missing name')
-                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': ''})
+                        _debug_preview_photo(i, '')
+                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': '', 'photo_type': _get_photo_type('')})
                         continue
                     email = (email or '').strip()
                     if not _is_valid_email(email):
                         email = _generate_email_from_name(name, suffix=str(i))
 
-                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip()})
+                    _debug_preview_photo(i, photo_val)
+                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip(), 'photo_type': _get_photo_type(photo_val)})
             except csv.Error:
                 # fallback: more tolerant line-by-line split using detected delimiter
                 stream2 = io.StringIO(text)
@@ -246,7 +265,8 @@ def import_studnts():
                     cols = [c.strip() for c in line.split(delimiter)]
                     if len(cols) < 2:
                         errors.append(f'Line {i}: not enough columns')
-                        preview_rows.append({'name': '', 'email': '', 'group': '', 'photo': ''})
+                        _debug_preview_photo(i, '')
+                        preview_rows.append({'name': '', 'email': '', 'group': '', 'photo': '', 'photo_type': _get_photo_type('')})
                         continue
                     name = cols[0]
                     email = cols[1]
@@ -257,12 +277,14 @@ def import_studnts():
                         photo_val = photo_val[1:-1]
                     if not name:
                         errors.append(f'Line {i}: missing name')
-                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': ''})
+                        _debug_preview_photo(i, '')
+                        preview_rows.append({'name': '', 'email': email, 'group': group_val, 'photo': '', 'photo_type': _get_photo_type('')})
                         continue
                     email = (email or '').strip()
                     if not _is_valid_email(email):
                         email = _generate_email_from_name(name, suffix=str(i))
-                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip()})
+                    _debug_preview_photo(i, photo_val)
+                    preview_rows.append({'name': name, 'email': email, 'group': group_val, 'photo': (photo_val or '').strip(), 'photo_type': _get_photo_type(photo_val)})
         # pass groups for dropdown (allow forcing target group)
         groups = StudntGrp.query.order_by(StudntGrp.Name).all()
         return render_template('admin_import_preview.html', rows=preview_rows, groups=groups, errors=errors)
@@ -588,117 +610,7 @@ def match_names_images(names, images, emails):
     return rows
 
 
-def _save_data_uri_to_file(data_uri: str, prefix: str = 'photo', max_bytes: int = 3 * 1024 * 1024) -> str:
-    """Decode a data:image/...;base64,... URI and save it under static/uploads/trombi.
-
-    Returns the web path ("/static/uploads/trombi/<file>") on success, or None on failure.
-    """
-    print('[IMPORT_CSV] _save_data_uri_to_file: start')
-    if not data_uri or not data_uri.lower().startswith('data:image/'):
-        print('[IMPORT_CSV] data_uri missing or not image')
-        return None
-    # allow newlines inside the base64 payload (use DOTALL)
-    m = re.match(r'^data:(image/[^;]+);base64,(.+)$', data_uri, re.I | re.S)
-    if not m:
-        print('[IMPORT_CSV] regex did not match data URI format')
-        return None
-    mime = m.group(1).lower()
-    b64 = m.group(2)
-    print(f'[IMPORT_CSV] mime detected: {mime}')
-    # Remove surrounding quotes that may come from CSV quoting
-    if (b64.startswith('"') and b64.endswith('"')) or (b64.startswith("'") and b64.endswith("'")):
-        b64 = b64[1:-1]
-    # remove whitespace/newlines
-    b64 = re.sub(r'\s+', '', b64)
-    # support base64url
-    b64 = b64.replace('-', '+').replace('_', '/')
-    # remove stray quote characters if present anywhere
-    b64 = b64.replace('"', '').replace("'", '')
-    # ensure padding
-    mod = len(b64) % 4
-    if mod != 0:
-        pad = 4 - mod
-        b64 += '=' * pad
-        print(f'[IMPORT_CSV] added padding: {pad}')
-    print(f'[IMPORT_CSV] base64 length after cleanup: {len(b64)}')
-    try:
-        raw = base64.b64decode(b64, validate=True)
-    except Exception as e:
-        print('[IMPORT_CSV] base64 decode validate failed:', repr(e))
-        try:
-            raw = base64.b64decode(b64)
-        except Exception as e2:
-            print('[IMPORT_CSV] base64 decode fallback failed:', repr(e2))
-            return None
-    print(f'[IMPORT_CSV] decoded bytes: {len(raw)}')
-    if len(raw) > max_bytes:
-        print('[IMPORT_CSV] decoded image exceeds max_bytes')
-        return None
-
-    # If Pillow is available, validate and (re)encode the image using Pillow
-    folder = os.path.abspath(os.path.join(os.path.dirname(__file__), 'static', 'uploads', 'trombi'))
-    try:
-        os.makedirs(folder, exist_ok=True)
-    except Exception as e:
-        print('[IMPORT_CSV] failed to create folder:', repr(e))
-        return None
-
-    timestamp = int(time.time() * 1000)
-    # Preferred extension from mime
-    ext_map = {
-        'image/jpeg': 'jpg',
-        'image/jpg': 'jpg',
-        'image/png': 'png',
-        'image/gif': 'gif',
-        'image/webp': 'webp'
-    }
-    preferred_ext = ext_map.get(mime)
-
-    if have_pillow:
-        try:
-            print('[IMPORT_CSV] Pillow available: validating image')
-            from io import BytesIO
-            bio = BytesIO(raw)
-            img = _PILImage.open(bio)
-            img.verify()  # validate image integrity
-            # Re-open for saving (verify() leaves file in unusable state)
-            bio.seek(0)
-            img = _PILImage.open(bio)
-            fmt = img.format or ''
-            fmt = fmt.upper()
-            print(f'[IMPORT_CSV] Pillow detected format: {fmt}, mode: {getattr(img, "mode", None)}')
-            # Map Pillow format to extension
-            fmt_to_ext = {'JPEG': 'jpg', 'JPG': 'jpg', 'PNG': 'png', 'GIF': 'gif', 'WEBP': 'webp'}
-            ext = fmt_to_ext.get(fmt, preferred_ext or 'bin')
-            filename = f"{prefix}_{timestamp}.{ext}"
-            filename = secure_filename(filename)
-            path = os.path.join(folder, filename)
-            # For JPEG ensure mode is suitable
-            save_kwargs = {}
-            if fmt in ('JPEG', 'JPG') and img.mode in ('RGBA', 'LA'):
-                img = img.convert('RGB')
-            # Save via Pillow to ensure valid encoding
-            img.save(path, format=fmt if fmt else None, **save_kwargs)
-            print('[IMPORT_CSV] saved via Pillow:', path)
-            return f'/static/uploads/trombi/{filename}'
-        except Exception as e:
-            print('[IMPORT_CSV] Pillow processing failed:', repr(e))
-            # fallback to raw-write if Pillow fails
-            pass
-
-    # Fallback: write raw decoded bytes to file using preferred extension or bin
-    ext = preferred_ext or 'bin'
-    filename = f"{prefix}_{timestamp}.{ext}"
-    filename = secure_filename(filename)
-    path = os.path.join(folder, filename)
-    try:
-        with open(path, 'wb') as fh:
-            fh.write(raw)
-        print('[IMPORT_CSV] saved raw bytes to:', path)
-    except Exception as e:
-        print('[IMPORT_CSV] failed to write raw bytes:', repr(e))
-        return None
-    return f'/static/uploads/trombi/{filename}'
+ 
 
 
 def _create_scores_for_student(studnt_id, group_id):

@@ -95,7 +95,80 @@ def list_resource(resource):
                     except Exception:
                         # leave original id if anything goes wrong
                         pass
+    if resource == 'studnts':
+        groups = StudntGrp.query.order_by(StudntGrp.Name).all()
+        return render_template('admin_list.html', resource=resource, columns=cols, rows=rows, norm_color=norm_color, groups=groups)
     return render_template('admin_list.html', resource=resource, columns=cols, rows=rows, norm_color=norm_color)
+
+
+
+@admin_bp.route('/studnts/bulk', methods=['POST'])
+def studnts_bulk_action():
+    # Handle bulk actions for students: delete or change group
+    action = request.form.get('action')
+    selected = request.form.getlist('selected_ids')
+    if not selected:
+        flash('Aucune sélection fournie', 'warning')
+        return redirect(url_for('admin.list_resource', resource='studnts'))
+    try:
+        ids = [int(i) for i in selected]
+    except ValueError:
+        flash('Identifiants invalides', 'danger')
+        return redirect(url_for('admin.list_resource', resource='studnts'))
+
+    if action == 'delete':
+        total_students = 0
+        total_scores = 0
+        total_comments = 0
+        for sid in ids:
+            st = Studnt.query.get(sid)
+            if not st:
+                continue
+            n_scores = Score.query.filter_by(Studnt_Id=st.Id).count()
+            n_comments = Comment.query.filter_by(Studnt_Id=st.Id).count()
+            total_students += 1
+            total_scores += n_scores
+            total_comments += n_comments
+            Score.query.filter_by(Studnt_Id=st.Id).delete()
+            Comment.query.filter_by(Studnt_Id=st.Id).delete()
+            Db.session.delete(st)
+        Db.session.commit()
+        flash(f'Suppression complète: {total_students} étudiants, {total_scores} scores, {total_comments} commentaires', 'success')
+        return redirect(url_for('admin.list_resource', resource='studnts'))
+
+    if action == 'change_group':
+        tgt = request.form.get('target_group_id')
+        if not tgt:
+            flash('Groupe cible requis', 'danger')
+            return redirect(url_for('admin.list_resource', resource='studnts'))
+        try:
+            tgt_id = int(tgt)
+        except ValueError:
+            flash('Groupe cible invalide', 'danger')
+            return redirect(url_for('admin.list_resource', resource='studnts'))
+
+        changed = 0
+        for sid in ids:
+            st = Studnt.query.get(sid)
+            if not st:
+                continue
+            st.Group_Id = tgt_id
+            # ensure scores exist for evaluations in the new group
+            evals = Evaluat.query.filter_by(Group_Id=tgt_id).all()
+            for ev in evals:
+                skills = Skill.query.filter_by(SkillSet_Id=ev.SkillSet_Id).all()
+                for sk in skills:
+                    existing = Score.query.filter_by(Evaluat_Id=ev.Id, Studnt_Id=st.Id, Skill_Id=sk.Id).first()
+                    if not existing:
+                        s = Score(Evaluat_Id=ev.Id, Studnt_Id=st.Id, Skill_Id=sk.Id, Level_Id=None)
+                        Db.session.add(s)
+            changed += 1
+        Db.session.commit()
+        flash(f'{changed} étudiants déplacés vers le groupe sélectionné', 'success')
+        return redirect(url_for('admin.list_resource', resource='studnts'))
+
+    flash('Action inconnue', 'danger')
+    return redirect(url_for('admin.list_resource', resource='studnts'))
 
 
 @admin_bp.route('/api/sheets')
