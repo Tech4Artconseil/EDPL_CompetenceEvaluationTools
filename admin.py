@@ -301,6 +301,10 @@ def create_resource(resource):
             else:
                 data[c] = val if val != '' else None
         new = model(**{k: data[k] for k in data})
+        # validation: Skill must have a SkillSet_Id
+        if resource == 'skills' and not data.get('SkillSet_Id'):
+            flash('SkillSet_Id is required for a skill', 'danger')
+            return render_template('admin_form.html', resource=resource, columns=cols, item=None, choices=choices, attr=getattr, norm_color=norm_color)
         # If resource is 'evaluats', validate provided Sheet_Local_Path exists (if provided)
         if resource == 'evaluats':
             path = data.get('Sheet_Local_Path')
