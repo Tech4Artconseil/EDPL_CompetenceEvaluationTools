@@ -7,7 +7,8 @@ Handles dashboard display, score updates, comments, and CSV export.
 import os
 from flask import Flask, render_template, request, jsonify, send_file
 import re
-from Data_Models import Db, Level, Skill, Studnt, Evaluat, Score, Comment, Note, EvaluatNote
+from sqlalchemy import nullslast
+from Data_Models import Db, Level, Skill, Studnt, Evaluat, Score, Comment, Note, EvaluatNote, Saison
 from admin import admin_bp
 import csv
 import io
@@ -81,19 +82,37 @@ def App_Main_Dashboard():
     """
     # Allow selecting an evaluation via query param ?evaluat_id=ID
     evaluat_id = request.args.get('evaluat_id', type=int)
+    # Allow filtering the panel list by saison via ?saison=2025-2026
+    saison_filter = request.args.get('saison', type=str) or None
+
     Current_Evaluat = None
     if evaluat_id:
         Current_Evaluat = Evaluat.query.get(evaluat_id)
 
-    # If none selected, pick the first evaluation
+    # If none selected, pick the first evaluation of the filtered saison (or globally first)
     if not Current_Evaluat:
-        Current_Evaluat = Evaluat.query.first()
+        q = Evaluat.query
+        if saison_filter:
+            q = q.filter(Evaluat.Saison_Rel.has(Name=saison_filter))
+        Current_Evaluat = q.order_by(Evaluat.CreatedAt.desc()).first()
+
+    if not Current_Evaluat:
+        Current_Evaluat = Evaluat.query.order_by(Evaluat.CreatedAt.desc()).first()
 
     if not Current_Evaluat:
         return "No evaluation found. Please run Data_Init.py first.", 404
 
-    # Load all evaluations for the panels
-    All_Evaluats = Evaluat.query.order_by(Evaluat.CreatedAt.desc()).all()
+    # Collect all saisons for the filter bar (from the saisons table)
+    All_Saisons = sorted([s.Name for s in Saison.query.all()], reverse=True)
+
+    # Load all evaluations for the panels, grouped by saison then name
+    Evaluat_Query = Evaluat.query.outerjoin(Saison, Evaluat.Saison_Id == Saison.Id)
+    if saison_filter:
+        Evaluat_Query = Evaluat_Query.filter(Saison.Name == saison_filter)
+    All_Evaluats = Evaluat_Query.order_by(
+        nullslast(Saison.Name.desc()),
+        Evaluat.CreatedAt.desc()
+    ).all()
     
     # Get all students in the evaluation's group
     All_Studnts = Studnt.query.filter_by(Group_Id=Current_Evaluat.Group_Id).order_by(Studnt.Name).all()
@@ -141,6 +160,8 @@ def App_Main_Dashboard():
         'Eval_Dash.html',
         Evaluat=Current_Evaluat,
         All_Evaluats=All_Evaluats,
+        All_Saisons=All_Saisons,
+        Saison_Filter=saison_filter,
         Studnts=All_Studnts,
         Skills=All_Skills,
         Levels=All_Levels,

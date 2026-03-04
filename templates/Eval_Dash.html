@@ -13,6 +13,7 @@
             <h1>Evaluation Dashboard</h1>
             <!-- Admin button bar -->
             <div class="admin-bar">
+                <a class="btn" href="/admin/saisons">Saisons</a>
                 <a class="btn" href="/admin/skills">Skills</a>
                 <a class="btn" href="/admin/skill_sets">Skill Sets</a>
                 <a class="btn" href="/admin/studnt_grps">Groups</a>
@@ -23,29 +24,48 @@
                 <a class="btn" href="/admin/sheet_mappings">Sheet Mappings</a>
             </div>
 
-            <!-- Evaluation panels -->
+            <!-- Filtre par saison -->
+            {% if All_Saisons %}
+            <div class="saison-filter">
+                <a class="saison-btn {% if not Saison_Filter %}active{% endif %}" href="?">Toutes</a>
+                {% for s in All_Saisons %}
+                <a class="saison-btn {% if Saison_Filter == s %}active{% endif %}" href="?saison={{ s }}">{{ s }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Evaluation panels (groupés par saison) -->
             <div class="eval-panels">
+                {% set ns = namespace(current_saison='__unset__') %}
                 {% for ev in All_Evaluats %}
-                <a class="eval-panel {% if ev.Id == Evaluat.Id %}active{% endif %}" href="?evaluat_id={{ ev.Id }}">
+                    {% set ev_saison = ev.Saison if ev.Saison else '' %}
+                    {% if ev_saison != ns.current_saison %}
+                        {% set ns.current_saison = ev_saison %}
+                        <div class="saison-header">{{ ev_saison if ev_saison else 'Sans saison' }}</div>
+                    {% endif %}
+                <a class="eval-panel {% if ev.Id == Evaluat.Id %}active{% endif %}" href="?evaluat_id={{ ev.Id }}{% if Saison_Filter %}&saison={{ Saison_Filter }}{% endif %}">
                     <div class="title">{{ ev.Name }}</div>
-                    <div class="meta">Group: {{ ev.Group.Name }} • SkillSet: {{ ev.SkillSet_Id }}</div>
+                    <div class="meta">{{ ev.Group.Name }}</div>
                 </a>
                 {% endfor %}
             </div>
             <div class="eval-info">
                 <h2>{{ Evaluat.Name }}</h2>
-                <p>Group: {{ Evaluat.Group.Name }} | Skills Set: {{ Evaluat.SkillSet_Id }}</p>
+                <p>
+                    {% if Evaluat.Saison %}<span class="saison-badge">{{ Evaluat.Saison }}</span>{% endif %}
+                    Group: {{ Evaluat.Group.Name }} | Skills Set: {{ Evaluat.SkillSet_Id }}
+                </p>
             </div>
             <div class="actions">
                 <a href="/export/csv?evaluat_id={{ Evaluat.Id }}" class="btn-export">Export CSV</a>
                 <a href="/export/xlsx?evaluat_id={{ Evaluat.Id }}" class="btn-export" style="margin-left:8px">Export XLSX</a>
                 {% if Evaluat.Sheet_Local_Path %}
-                <a href="/evaluat/sheet/preview?evaluat_id={{ Evaluat.Id }}" class="btn-export" style="margin-left:8px">Prévisualiser & Remplir le template</a>
+                <a href="/evaluat/sheet/preview?evaluat_id={{ Evaluat.Id }}" class="btn-export" style="margin-left:8px">Prévisualiser &amp; Remplir le template</a>
                 <form method="post" action="/evaluat/sheet/fill_simple" target="_blank" style="display:inline; margin-left:8px">
                     <input type="hidden" name="evaluat_id" value="{{ Evaluat.Id }}">
                     <button class="btn-export" type="submit">Remplissage simple (télécharger)</button>
                 </form>
-                <button class="btn-export" style="margin-left:8px" onclick="dryRunFill({{ Evaluat.Id }})">Aperçu remplissage</button>
+                <button type="button" class="btn-export" style="margin-left:8px" onclick="dryRunFill({{ Evaluat.Id }})">Aperçu remplissage</button>
                 {% endif %}
             </div>
         </header>

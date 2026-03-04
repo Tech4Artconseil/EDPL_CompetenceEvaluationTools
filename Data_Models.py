@@ -11,6 +11,22 @@ from datetime import datetime
 Db = SQLAlchemy()
 
 
+class Saison(Db.Model):
+    """Saison model - represents an academic season/year (e.g. '2025-2026')"""
+    __tablename__ = 'saisons'
+
+    Id = Db.Column(Db.Integer, primary_key=True)
+    Name = Db.Column(Db.String(50), unique=True, nullable=False)  # e.g. '2025-2026'
+    Descrip = Db.Column(Db.String(200), nullable=True)  # optional description
+
+    def Saison_To_Dict(self):
+        return {
+            'Id': self.Id,
+            'Name': self.Name,
+            'Descrip': self.Descrip,
+        }
+
+
 class Level(Db.Model):
     """Level model - represents evaluation levels with percentage and color"""
     __tablename__ = 'levels'
@@ -117,10 +133,18 @@ class Evaluat(Db.Model):
     CreatedAt = Db.Column(Db.DateTime, default=datetime.utcnow)
     # Local template path for the evaluation (optional)
     Sheet_Local_Path = Db.Column(Db.String(400), nullable=True)
-    
+    # FK to saisons table
+    Saison_Id = Db.Column(Db.Integer, Db.ForeignKey('saisons.Id'), nullable=True)
+
     # Relationships
     Group = Db.relationship('StudntGrp', backref='evaluats')
-    
+    Saison_Rel = Db.relationship('Saison', backref='evaluats')
+
+    @property
+    def Saison(self):
+        """Shortcut read-only: returns the saison name via Saison_Rel."""
+        return self.Saison_Rel.Name if self.Saison_Rel else None
+
     def Evaluat_To_Dict(self):
         """Convert Evaluat instance to dictionary"""
         return {
@@ -129,7 +153,9 @@ class Evaluat(Db.Model):
             'Group_Id': self.Group_Id,
             'SkillSet_Id': self.SkillSet_Id,
             'CreatedAt': self.CreatedAt.isoformat() if self.CreatedAt else None,
-            'Sheet_Local_Path': self.Sheet_Local_Path
+            'Sheet_Local_Path': self.Sheet_Local_Path,
+            'Saison': self.Saison,
+            'Saison_Id': self.Saison_Id,
         }
 
 

@@ -60,6 +60,53 @@ body {
 .eval-panel .title { font-weight: bold; color: #2c3e50; margin-bottom: 6px; }
 .eval-panel .meta { font-size: 12px; color: #7f8c8d; }
 
+/* ── Saison filter bar ───────────────────────────────────────────────────── */
+.saison-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.saison-btn {
+    padding: 4px 12px;
+    border-radius: 14px;
+    border: 1px solid #bdc3c7;
+    background: #f4f6f8;
+    color: #555;
+    font-size: 12px;
+    text-decoration: none;
+    transition: background 0.15s;
+}
+.saison-btn:hover { background: #dce8f5; border-color: #7fb3d3; }
+.saison-btn.active { background: #3498db; color: #fff; border-color: #2980b9; font-weight: bold; }
+
+/* ── Saison group header in panels ──────────────────────────────────────── */
+.saison-header {
+    width: 100%;
+    font-size: 11px;
+    font-weight: bold;
+    color: #95a5a6;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 6px 4px 2px;
+    border-bottom: 1px solid #ecf0f1;
+    margin-top: 6px;
+}
+
+/* ── Saison badge in eval-info ───────────────────────────────────────────── */
+.saison-badge {
+    display: inline-block;
+    background: #eaf4fb;
+    color: #2980b9;
+    border: 1px solid #aed6f1;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 12px;
+    font-weight: bold;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
 .eval-info h2 {
     color: #34495e;
     font-size: 20px;

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 import os
-from Data_Models import Db, Level, Skill, SkillSet, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType
+from Data_Models import Db, Level, Skill, SkillSet, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType, Saison
 from image_fetcher import name_parts, fetch_photo_url
 import re
 try:
@@ -37,6 +37,7 @@ def norm_color(val: object) -> str:
 
 # Map simple resource names to model classes
 MODEL_MAP = {
+    'saisons': Saison,
     'skills': Skill,
     'skill_sets': SkillSet,
     'studnt_grps': StudntGrp,
@@ -61,6 +62,7 @@ REF_MODELS = {
     'Evaluat': Evaluat,
     'Level': Level,
     'Note': Note,
+    'Saison': Saison,
 }
 
 
@@ -608,6 +610,14 @@ def delete_resource(resource, item_id):
         Score.query.filter_by(Skill_Id=item.Id).delete()
         Comment.query.filter_by(Skill_Id=item.Id).delete()
         deleted_info = {'skills': 1, 'scores': n_scores, 'comments': n_comments}
+    elif resource == 'saisons':
+        # Detach evaluations from this saison before deleting
+        evals_in_saison = Evaluat.query.filter_by(Saison_Id=item.Id).all()
+        for ev in evals_in_saison:
+            ev.Saison_Id = None
+            # Keep the text field as-is so existing data isn't lost
+        Db.session.flush()
+
     elif resource == 'studnt_grps':
         students = Studnt.query.filter_by(Group_Id=item.Id).all()
         evals = Evaluat.query.filter_by(Group_Id=item.Id).all()
