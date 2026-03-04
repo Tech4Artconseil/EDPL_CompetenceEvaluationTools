@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>{% if grp %}Modifier{% else %}Créer{% endif %} un sous-groupe – Admin</title>
+    <style>
+        body { font-family: sans-serif; margin: 1.5rem; max-width: 700px; }
+        h1   { margin-bottom: 1rem; }
+        label { display: block; font-weight: bold; margin-top: .9rem; margin-bottom: .2rem; }
+        input[type=text], select { width: 100%; padding: .4rem .6rem; font-size: .95rem;
+            border: 1px solid #aaa; border-radius: 4px; box-sizing: border-box; }
+        select[multiple] { height: 14rem; }
+        .hint { font-size: .8rem; color: #666; margin-top: .15rem; }
+        .btn-row { margin-top: 1.2rem; display: flex; gap: .6rem; }
+        button, a.btn { padding: .45rem .9rem; font-size: .9rem; border-radius: 4px;
+            border: 1px solid #aaa; cursor: pointer; text-decoration: none; }
+        button[type=submit]  { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+        a.btn-secondary      { background: #6c757d; color: #fff; border-color: #6c757d; }
+        .flash-list { list-style: none; padding: 0; margin-bottom: 1rem; }
+        .flash-list li { padding: .4rem .8rem; border-radius: 4px; margin-bottom: .3rem; }
+        .flash-success { background: #d1e7dd; color: #0f5132; }
+        .flash-danger  { background: #f8d7da; color: #842029; }
+        .flash-warning { background: #fff3cd; color: #664d03; }
+    </style>
+</head>
+<body>
+<h1>{% if grp %}Modifier le groupe « {{ grp.Name }} »{% else %}Nouveau sous-groupe{% endif %}</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul class="flash-list">
+    {% for cat, msg in messages %}
+    <li class="flash-{{ cat }}">{{ msg }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+
+<form method="post">
+    <!-- Nom du groupe -->
+    <label for="name">Nom du groupe *</label>
+    <input type="text" id="name" name="name" required
+           value="{{ grp.Name if grp else '' }}"
+           placeholder="ex : Groupe TD A, Oral 1…">
+
+    <!-- Filtre par saison -->
+    <label for="saison_id">Filtrer par saison</label>
+    <select id="saison_id" onchange="loadEvaluats(this.value)">
+        <option value="">— Toutes les saisons —</option>
+        {% for s in saisons %}
+        <option value="{{ s.Id }}"
+            {% if selected_saison_id == s.Id %}selected{% endif %}>
+            {{ s.Name }}{% if s.Descrip %} – {{ s.Descrip }}{% endif %}
+        </option>
+        {% endfor %}
+    </select>
+    <p class="hint">Sélectionnez une saison pour restreindre la liste des évaluations.</p>
+
+    <!-- Évaluation de rattachement -->
+    <label for="evaluat_id">Évaluation *</label>
+    <select id="evaluat_id" name="evaluat_id" required onchange="loadStudents(this.value)">
+        <option value="">— Choisir —</option>
+        {% for ev in evaluats %}
+        <option value="{{ ev.Id }}"
+            {% if selected_evaluat_id == ev.Id %}selected{% endif %}>
+            {{ ev.Name }}
+        </option>
+        {% endfor %}
+    </select>
+    <p class="hint">Seuls les étudiants du groupe de classe de l'évaluation choisie sont listés ci-dessous.</p>
+
+    <!-- Sélection des membres -->
+    <label for="member_ids">Membres (Ctrl+Clic pour sélection multiple)</label>
+    <select id="member_ids" name="member_ids" multiple>
+        {% for st in students %}
+        <option value="{{ st.Id }}"
+            {% if st.Id in member_ids %}selected{% endif %}>
+            {{ st.Name }}
+        </option>
+        {% endfor %}
+    </select>
+    <p class="hint" id="member-hint">
+        {% if students %}{{ students | length }} étudiant(s) disponible(s).{% else %}Sélectionnez d'abord une évaluation.{% endif %}
+    </p>
+
+    <div class="btn-row">
+        <button type="submit">{% if grp %}Enregistrer{% else %}Créer{% endif %}</button>
+        <a href="{{ url_for('admin.evaluat_grps_list', evaluat_id=selected_evaluat_id or '') }}" class="btn btn-secondary">Annuler</a>
+    </div>
+</form>
+
+<script>
+// Recharge le select des évaluations selon la saison choisie
+function loadEvaluats(saison_id) {
+    const evSel = document.getElementById('evaluat_id');
+    const url = '/admin/api/evaluat_grps/evaluats' + (saison_id ? '?saison_id=' + saison_id : '');
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            // Vide le select évaluation et vide aussi les étudiants
+            evSel.innerHTML = '<option value="">— Choisir —</option>';
+            document.getElementById('member_ids').innerHTML = '';
+            document.getElementById('member-hint').textContent = 'Sélectionnez d\'abord une évaluation.';
+            if (data.success && data.evaluats.length) {
+                data.evaluats.forEach(e => {
+                    const opt = document.createElement('option');
+                    opt.value = e.id;
+                    opt.textContent = e.name;
+                    evSel.appendChild(opt);
+                });
+            }
+        })
+        .catch(() => { /* silencieux */ });
+}
+
+// Rechargement dynamique des étudiants quand l'évaluation change
+function loadStudents(evaluat_id) {
+    const sel = document.getElementById('member_ids');
+    if (!evaluat_id) {
+        sel.innerHTML = '';
+        document.getElementById('member-hint').textContent = 'Sélectionnez d\'abord une évaluation.';
+        return;
+    }
+    fetch('/admin/api/evaluat_grps/students?evaluat_id=' + evaluat_id)
+        .then(r => r.json())
+        .then(data => {
+            sel.innerHTML = '';
+            if (data.success && data.students.length) {
+                data.students.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = s.name;
+                    sel.appendChild(opt);
+                });
+                document.getElementById('member-hint').textContent =
+                    data.students.length + ' étudiant(s) disponible(s).';
+            } else {
+                document.getElementById('member-hint').textContent = 'Aucun étudiant pour cette évaluation.';
+            }
+        })
+        .catch(() => {
+            document.getElementById('member-hint').textContent = 'Erreur lors du chargement.';
+        });
+}
+</script>
+</body>
+</html>

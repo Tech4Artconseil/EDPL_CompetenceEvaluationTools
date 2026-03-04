@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <title>Sous-groupes d'évaluation – Admin</title>
+    <style>
+        body { font-family: sans-serif; margin: 1.5rem; }
+        h1   { margin-bottom: .5rem; }
+        .toolbar { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
+        select, button, a.btn { padding: .35rem .75rem; font-size: .9rem; border-radius: 4px; border: 1px solid #aaa; cursor: pointer; text-decoration: none; }
+        a.btn-primary { background: #0d6efd; color: #fff; border-color: #0d6efd; }
+        a.btn-secondary { background: #6c757d; color: #fff; border-color: #6c757d; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: .45rem .7rem; text-align: left; vertical-align: top; }
+        th { background: #f0f0f0; }
+        tr:hover td { background: #f9f9f9; }
+        .actions { display: flex; gap: .4rem; }
+        .members-list { margin: 0; padding: 0; list-style: none; }
+        .members-list li { font-size: .85rem; color: #444; }
+        .flash-list { list-style: none; padding: 0; margin-bottom: 1rem; }
+        .flash-list li { padding: .4rem .8rem; border-radius: 4px; margin-bottom: .3rem; }
+        .flash-success { background: #d1e7dd; color: #0f5132; }
+        .flash-danger  { background: #f8d7da; color: #842029; }
+        .flash-warning { background: #fff3cd; color: #664d03; }
+    </style>
+</head>
+<body>
+<h1>Sous-groupes d'évaluation</h1>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<ul class="flash-list">
+    {% for cat, msg in messages %}
+    <li class="flash-{{ cat }}">{{ msg }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% endwith %}
+
+<div class="toolbar">
+    <!-- Filtre par évaluation -->
+    <form method="get" style="display:flex;gap:.5rem;align-items:center;">
+        <label for="evaluat_id">Évaluation&nbsp;:</label>
+        <select name="evaluat_id" id="evaluat_id" onchange="this.form.submit()">
+            <option value="">— Toutes —</option>
+            {% for ev in evaluats %}
+            <option value="{{ ev.Id }}" {% if selected_evaluat_id == ev.Id %}selected{% endif %}>
+                {{ ev.Name }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <a href="{{ url_for('admin.evaluat_grps_create', evaluat_id=selected_evaluat_id or '') }}" class="btn btn-primary">
+        + Nouveau groupe
+    </a>
+    <a href="{{ url_for('admin.admin_index') }}" class="btn btn-secondary">← Admin</a>
+</div>
+
+{% if grps %}
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Nom du groupe</th>
+            <th>Évaluation</th>
+            <th>Membres ({{ grps | map(attribute='Members') | map('length') | sum }} total)</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for grp in grps %}
+        <tr>
+            <td>{{ grp.Id }}</td>
+            <td><strong>{{ grp.Name }}</strong></td>
+            <td>{{ grp.Evaluat.Name if grp.Evaluat else '—' }}</td>
+            <td>
+                {% if grp.Members %}
+                <ul class="members-list">
+                    {% for m in grp.Members %}
+                    <li>{{ m.Studnt.Name if m.Studnt else m.Studnt_Id }}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <em style="color:#999">Aucun membre</em>
+                {% endif %}
+            </td>
+            <td>
+                <div class="actions">
+                    <a href="{{ url_for('admin.evaluat_grps_edit', grp_id=grp.Id) }}" class="btn btn-secondary">Modifier</a>
+                    <form method="post" action="{{ url_for('admin.evaluat_grps_delete', grp_id=grp.Id) }}"
+                          onsubmit="return confirm('Supprimer le groupe « {{ grp.Name }} » et ses {{ grp.Members | length }} membre(s) ?')">
+                        <button type="submit" style="background:#dc3545;color:#fff;border-color:#dc3545;">Supprimer</button>
+                    </form>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p><em>Aucun sous-groupe trouvé{% if selected_evaluat_id %} pour cette évaluation{% endif %}.</em></p>
+{% endif %}
+
+</body>
+</html>

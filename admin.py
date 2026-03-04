@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 import os
-from Data_Models import Db, Level, Skill, SkillSet, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType, Saison
+from Data_Models import Db, Level, Skill, SkillSet, StudntGrp, Studnt, Evaluat, Score, Comment, Note, SheetMapping, MappingType, Saison, EvaluatGrp, EvaluatGrpMember
 from image_fetcher import name_parts, fetch_photo_url
 import re
 try:
@@ -133,6 +133,7 @@ def studnts_bulk_action():
             total_comments += n_comments
             Score.query.filter_by(Studnt_Id=st.Id).delete()
             Comment.query.filter_by(Studnt_Id=st.Id).delete()
+            EvaluatGrpMember.query.filter_by(Studnt_Id=st.Id).delete()
             Db.session.delete(st)
         Db.session.commit()
         flash(f'Suppression complète: {total_students} étudiants, {total_scores} scores, {total_comments} commentaires', 'success')
@@ -597,6 +598,7 @@ def delete_resource(resource, item_id):
         n_comments = Comment.query.filter_by(Studnt_Id=item.Id).count()
         Score.query.filter_by(Studnt_Id=item.Id).delete()
         Comment.query.filter_by(Studnt_Id=item.Id).delete()
+        EvaluatGrpMember.query.filter_by(Studnt_Id=item.Id).delete()
         deleted_info = {'students': 1, 'scores': n_scores, 'comments': n_comments}
     elif resource == 'evaluats':
         n_scores = Score.query.filter_by(Evaluat_Id=item.Id).count()
@@ -632,6 +634,7 @@ def delete_resource(resource, item_id):
             n_comments += cc
             Score.query.filter_by(Studnt_Id=st.Id).delete()
             Comment.query.filter_by(Studnt_Id=st.Id).delete()
+            EvaluatGrpMember.query.filter_by(Studnt_Id=st.Id).delete()
             Db.session.delete(st)
         for ev in evals:
             es = Score.query.filter_by(Evaluat_Id=ev.Id).count()
@@ -654,3 +657,186 @@ def delete_resource(resource, item_id):
     summary = ', '.join(parts) if parts else f"1 {resource}"
     flash(f'Deletion completed: {summary}', 'success')
     return redirect(url_for('admin.list_resource', resource=resource))
+
+
+# ---------------------------------------------------------------------------
+# Routes dédiées : EvaluatGrp (sous-groupes d'étudiants par évaluation)
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/evaluat_grps')
+def evaluat_grps_list():
+    """Liste des sous-groupes, filtrée optionnellement par ?evaluat_id="""
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    q = EvaluatGrp.query
+    if evaluat_id:
+        q = q.filter_by(Evaluat_Id=evaluat_id)
+    grps = q.order_by(EvaluatGrp.Evaluat_Id, EvaluatGrp.Name).all()
+    evaluats = Evaluat.query.order_by(Evaluat.Name).all()
+    return render_template(
+        'admin_evaluat_grp_list.html',
+        grps=grps,
+        evaluats=evaluats,
+        selected_evaluat_id=evaluat_id,
+    )
+
+
+@admin_bp.route('/evaluat_grps/create', methods=['GET', 'POST'])
+def evaluat_grps_create():
+    """Créer un nouveau sous-groupe."""
+    saisons = Saison.query.order_by(Saison.Name.desc()).all()
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    # Détermine la saison présélectionnée depuis l'évaluation présélectionnée
+    presel_saison_id = None
+    if evaluat_id:
+        _ev = Evaluat.query.get(evaluat_id)
+        if _ev:
+            presel_saison_id = _ev.Saison_Id
+    evaluats = Evaluat.query.filter_by(Saison_Id=presel_saison_id).order_by(Evaluat.Name).all() if presel_saison_id else Evaluat.query.order_by(Evaluat.Name).all()
+
+    if request.method == 'POST':
+        name        = (request.form.get('name') or '').strip()
+        ev_id       = request.form.get('evaluat_id', type=int)
+        member_ids  = [int(i) for i in request.form.getlist('member_ids') if i]
+
+        if not name:
+            flash('Le nom du groupe est obligatoire.', 'danger')
+            return redirect(url_for('admin.evaluat_grps_create', evaluat_id=ev_id))
+        if not ev_id:
+            flash("L'évaluation est obligatoire.", 'danger')
+            return redirect(url_for('admin.evaluat_grps_create'))
+
+        try:
+            grp = EvaluatGrp(Name=name, Evaluat_Id=ev_id)
+            Db.session.add(grp)
+            Db.session.flush()  # obtenir grp.Id avant d'ajouter les membres
+
+            for sid in member_ids:
+                Db.session.add(EvaluatGrpMember(EvaluatGrp_Id=grp.Id, Studnt_Id=sid))
+
+            Db.session.commit()
+            flash(f'Groupe « {grp.Name} » créé avec {len(member_ids)} membre(s).', 'success')
+            return redirect(url_for('admin.evaluat_grps_list', evaluat_id=ev_id))
+        except Exception as e:
+            Db.session.rollback()
+            flash(f'Erreur : {e}', 'danger')
+
+    # Prépare la liste d'étudiants pour l'évaluation préselectionnée
+    students = []
+    if evaluat_id:
+        ev = Evaluat.query.get(evaluat_id)
+        if ev:
+            students = Studnt.query.filter_by(Group_Id=ev.Group_Id).order_by(Studnt.Name).all()
+
+    return render_template(
+        'admin_evaluat_grp_form.html',
+        grp=None,
+        saisons=saisons,
+        selected_saison_id=presel_saison_id,
+        evaluats=evaluats,
+        students=students,
+        selected_evaluat_id=evaluat_id,
+        member_ids=[],
+    )
+
+
+@admin_bp.route('/evaluat_grps/<int:grp_id>/edit', methods=['GET', 'POST'])
+def evaluat_grps_edit(grp_id):
+    """Modifier un sous-groupe existant."""
+    grp = EvaluatGrp.query.get_or_404(grp_id)
+    saisons = Saison.query.order_by(Saison.Name.desc()).all()
+    current_saison_id = Evaluat.query.get(grp.Evaluat_Id).Saison_Id if grp.Evaluat_Id else None
+    evaluats = Evaluat.query.filter_by(Saison_Id=current_saison_id).order_by(Evaluat.Name).all() if current_saison_id else Evaluat.query.order_by(Evaluat.Name).all()
+    current_member_ids = [m.Studnt_Id for m in grp.Members]
+
+    if request.method == 'POST':
+        name       = (request.form.get('name') or '').strip()
+        ev_id      = request.form.get('evaluat_id', type=int)
+        member_ids = [int(i) for i in request.form.getlist('member_ids') if i]
+
+        if not name:
+            flash('Le nom du groupe est obligatoire.', 'danger')
+            return redirect(url_for('admin.evaluat_grps_edit', grp_id=grp_id))
+        if not ev_id:
+            flash("L'évaluation est obligatoire.", 'danger')
+            return redirect(url_for('admin.evaluat_grps_edit', grp_id=grp_id))
+
+        try:
+            grp.Name       = name
+            grp.Evaluat_Id = ev_id
+
+            # Recalcul complet des membres : supprimer puis réinsérer
+            EvaluatGrpMember.query.filter_by(EvaluatGrp_Id=grp.Id).delete()
+            for sid in member_ids:
+                Db.session.add(EvaluatGrpMember(EvaluatGrp_Id=grp.Id, Studnt_Id=sid))
+
+            Db.session.commit()
+            flash(f'Groupe « {grp.Name} » mis à jour ({len(member_ids)} membre(s)).', 'success')
+            return redirect(url_for('admin.evaluat_grps_list', evaluat_id=ev_id))
+        except Exception as e:
+            Db.session.rollback()
+            flash(f'Erreur : {e}', 'danger')
+
+    ev = Evaluat.query.get(grp.Evaluat_Id)
+    students = Studnt.query.filter_by(Group_Id=ev.Group_Id).order_by(Studnt.Name).all() if ev else []
+
+    return render_template(
+        'admin_evaluat_grp_form.html',
+        grp=grp,
+        saisons=saisons,
+        selected_saison_id=current_saison_id,
+        evaluats=evaluats,
+        students=students,
+        selected_evaluat_id=grp.Evaluat_Id,
+        member_ids=current_member_ids,
+    )
+
+
+@admin_bp.route('/evaluat_grps/<int:grp_id>/delete', methods=['POST'])
+def evaluat_grps_delete(grp_id):
+    """Supprimer un sous-groupe et tous ses membres (cascade)."""
+    grp = EvaluatGrp.query.get_or_404(grp_id)
+    ev_id   = grp.Evaluat_Id
+    nb      = len(grp.Members)
+    name    = grp.Name
+    try:
+        Db.session.delete(grp)  # cascade supprime les EvaluatGrpMember
+        Db.session.commit()
+        flash(f'Groupe « {name} » supprimé ({nb} membre(s) retirés).', 'success')
+    except Exception as e:
+        Db.session.rollback()
+        flash(f'Erreur lors de la suppression : {e}', 'danger')
+    return redirect(url_for('admin.evaluat_grps_list', evaluat_id=ev_id))
+
+
+@admin_bp.route('/api/evaluat_grps/evaluats')
+def api_evaluat_grps_evaluats():
+    """Retourne les évaluations d'une saison (JSON) pour chargement dynamique.
+    Query param : saison_id (optionnel ; si absent → toutes les évaluations)
+    """
+    saison_id = request.args.get('saison_id', type=int)
+    q = Evaluat.query
+    if saison_id:
+        q = q.filter_by(Saison_Id=saison_id)
+    evs = q.order_by(Evaluat.Name).all()
+    return jsonify({
+        'success': True,
+        'evaluats': [{'id': e.Id, 'name': e.Name} for e in evs],
+    })
+
+
+@admin_bp.route('/api/evaluat_grps/students')
+def api_evaluat_grps_students():
+    """Retourne la liste des étudiants d'une évaluation (JSON) pour chargement dynamique.
+    Query param : evaluat_id
+    """
+    evaluat_id = request.args.get('evaluat_id', type=int)
+    if not evaluat_id:
+        return jsonify({'success': False, 'error': 'evaluat_id required'}), 400
+    ev = Evaluat.query.get(evaluat_id)
+    if not ev:
+        return jsonify({'success': False, 'error': 'Evaluation not found'}), 404
+    students = Studnt.query.filter_by(Group_Id=ev.Group_Id).order_by(Studnt.Name).all()
+    return jsonify({
+        'success': True,
+        'students': [{'id': s.Id, 'name': s.Name} for s in students],
+    })

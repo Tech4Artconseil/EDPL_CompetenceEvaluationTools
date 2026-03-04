@@ -289,6 +289,56 @@ class EvaluatNote(Db.Model):
         }
 
 
+class EvaluatGrp(Db.Model):
+    """Sous-groupe nommé d'étudiants au sein d'une évaluation.
+    Permet de regrouper librement des étudiants d'une même évaluation
+    sous un label défini par l'utilisateur (ex: 'Groupe TD A', 'Oral 1'…).
+    """
+    __tablename__ = 'evaluat_grps'
+
+    Id         = Db.Column(Db.Integer, primary_key=True)
+    Name       = Db.Column(Db.String(100), nullable=False)
+    Evaluat_Id = Db.Column(Db.Integer, Db.ForeignKey('evaluats.Id'), nullable=False)
+    CreatedAt  = Db.Column(Db.DateTime, default=datetime.utcnow)
+
+    # cascade : suppression de l'évaluation → suppression du groupe → suppression des membres
+    Evaluat = Db.relationship(
+        'Evaluat',
+        backref=backref('evaluat_grps', cascade='all, delete-orphan')
+    )
+    Members = Db.relationship(
+        'EvaluatGrpMember',
+        backref='evaluat_grp',
+        cascade='all, delete-orphan'
+    )
+
+    def EvaluatGrp_To_Dict(self):
+        return {
+            'Id': self.Id,
+            'Name': self.Name,
+            'Evaluat_Id': self.Evaluat_Id,
+            'CreatedAt': self.CreatedAt.isoformat() if self.CreatedAt else None,
+        }
+
+
+class EvaluatGrpMember(Db.Model):
+    """Liaison EvaluatGrp <-> Studnt (table de jointure)."""
+    __tablename__ = 'evaluat_grp_members'
+
+    Id             = Db.Column(Db.Integer, primary_key=True)
+    EvaluatGrp_Id  = Db.Column(Db.Integer, Db.ForeignKey('evaluat_grps.Id'), nullable=False)
+    Studnt_Id      = Db.Column(Db.Integer, Db.ForeignKey('studnts.Id'),       nullable=False)
+
+    Studnt = Db.relationship('Studnt', backref='evaluat_grp_members')
+
+    def EvaluatGrpMember_To_Dict(self):
+        return {
+            'Id': self.Id,
+            'EvaluatGrp_Id': self.EvaluatGrp_Id,
+            'Studnt_Id': self.Studnt_Id,
+        }
+
+
 class MappingType(Db.Model):
     """Reusable group/type of mappings that can be applied to fill templates."""
     __tablename__ = 'mapping_types'

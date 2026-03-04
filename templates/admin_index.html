@@ -11,6 +11,11 @@
         <li><a href="{{ url_for('admin.list_resource', resource=r) }}">{{ r }}</a></li>
     {% endfor %}
     </ul>
+    <hr>
+    <h2>Sous-groupes d'évaluation</h2>
+    <ul>
+        <li><a href="{{ url_for('admin.evaluat_grps_list') }}">Gérer les sous-groupes (EvaluatGrp)</a></li>
+    </ul>
     <p><a href="{{ url_for('App_Main_Dashboard') }}">Retour au tableau</a></p>
 </body>
 </html>
