@@ -5,6 +5,9 @@ Handles dashboard display, score updates, comments, and CSV export.
 """
 
 import os
+import sys
+import webbrowser
+import threading
 from flask import Flask, render_template, request, jsonify, send_file
 import re
 from sqlalchemy import nullslast
@@ -22,11 +25,26 @@ try:
 except Exception:
     OPENPYXL_AVAILABLE = False
 
-# Initialize Flask application
-App = Flask(__name__)
-# Use the package's `instance` folder for the SQLite DB so Data_Init and the app agree
-PACKAGE_DIR = os.path.abspath(os.path.dirname(__file__))
-INSTANCE_DIR = os.path.join(PACKAGE_DIR, 'instance')
+# --- Détection mode PyInstaller (frozen) ou développement ---
+# En mode frozen : les fichiers extraits (templates/static) sont dans sys._MEIPASS
+# En mode développement : tout est dans le répertoire du script
+if getattr(sys, 'frozen', False):
+    # Exécutable compilé par PyInstaller
+    BASE_DIR = os.path.dirname(sys.executable)   # dossier contenant le .exe / binaire
+    BUNDLE_DIR = sys._MEIPASS                     # fichiers embarqués extraits au lancement
+else:
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    BUNDLE_DIR = BASE_DIR
+
+# Initialize Flask application with explicit paths (compatibles frozen + dev)
+App = Flask(
+    __name__,
+    template_folder=os.path.join(BUNDLE_DIR, 'templates'),
+    static_folder=os.path.join(BUNDLE_DIR, 'static'),
+)
+# La base SQLite est stockée à côté de l'exécutable (persistance entre sessions)
+PACKAGE_DIR = BASE_DIR
+INSTANCE_DIR = os.path.join(BASE_DIR, 'instance')
 os.makedirs(INSTANCE_DIR, exist_ok=True)
 DB_PATH = os.path.join(INSTANCE_DIR, 'evaluat.db')
 # Use forward slashes in the URI to avoid Windows backslash issues
@@ -630,5 +648,18 @@ def App_Main_Export_XLSX():
 
 
 if __name__ == '__main__':
-    # Run the Flask development server
-    App.run(debug=True, host='0.0.0.0', port=5000)
+    if getattr(sys, 'frozen', False):
+        # ---- Mode application empaquetée (PyInstaller) ----
+        # Ouvrir automatiquement le navigateur après démarrage du serveur
+        def _open_browser():
+            import time
+            time.sleep(1.5)  # laisser Flask démarrer
+            webbrowser.open('http://localhost:5000')
+        threading.Thread(target=_open_browser, daemon=True).start()
+        print("EDPL Competence Evaluation Tool")
+        print("Serveur démarré sur http://localhost:5000")
+        print("Fermez cette fenêtre pour arrêter l'application.")
+        App.run(debug=False, host='127.0.0.1', port=5000)
+    else:
+        # ---- Mode développement ----
+        App.run(debug=True, host='0.0.0.0', port=5000)

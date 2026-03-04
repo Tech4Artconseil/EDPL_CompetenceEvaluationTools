@@ -1,0 +1,1 @@
+[04/03/2026 19:50] v1.0-b001_20260304 - Windows - OK - C:\Travail\DEV\Devdivers\EDPL_CompetenceEvaluationTools\EDPL_CompetenceEvaluationTools\BUILDING\dist\EDPL_EvaluationTool
