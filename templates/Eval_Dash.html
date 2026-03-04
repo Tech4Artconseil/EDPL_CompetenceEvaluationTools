@@ -76,7 +76,17 @@
             <table class="eval-grid">
                 <thead>
                     <tr>
-                        <th class="student-header">Student</th>
+                        <th class="student-header">
+                            <div class="student-header-inner">
+                                <span>Student</span>
+                                {% if Evaluat_Grps %}
+                                <label class="grp-toggle-label" title="Afficher par sous-groupe">
+                                    <input type="checkbox" id="grpViewToggle" onchange="Eval_Toggle_Group_View(this.checked)">
+                                    <span>Par groupe</span>
+                                </label>
+                                {% endif %}
+                            </div>
+                        </th>
                         {% for Skill_tmp in Skills %}
                         <th class="skill-header">
                             <div class="skill-code">{{ Skill_tmp.Code }}</div>
@@ -89,9 +99,13 @@
                         <th class="comment-header">Commentaires</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for Studnt_tmp in Studnts %}
-                    <tr>
+{# ╔══════════════════════════════════════════════════════════════╗
+   ║  MACRO : render_studnt_row(Studnt_tmp)                     ║
+   ║  Génère une <tr> complète pour un étudiant.                ║
+   ║  Utilisé dans les deux tbody (vue plate et vue groupée).   ║
+   ╚══════════════════════════════════════════════════════════════╝ #}
+{%- macro render_studnt_row(Studnt_tmp) %}
+                    <tr data-student-id="{{ Studnt_tmp.Id }}">
                         <td class="student-cell">
                             <div class="student-info">
                                 {% if Studnt_tmp.Photo_Url %}
@@ -110,13 +124,12 @@
                         {% set Key = Studnt_tmp.Id ~ '_' ~ Skill_tmp.Id %}
                         {% set Score_Entry = Scores_Dict.get(Key) %}
                         {% set Cell_Comments = Comments_Dict.get(Key, []) %}
-                        <td class="eval-cell" 
+                        <td class="eval-cell"
                             data-student-id="{{ Studnt_tmp.Id }}"
                             data-skill-id="{{ Skill_tmp.Id }}"
                             data-evaluat-id="{{ Evaluat.Id }}">
-                            
                             <!-- Level selector -->
-                            <select class="level-select" 
+                            <select class="level-select"
                                     onchange="Eval_Update_Score(this)"
                                     {% if Score_Entry and Score_Entry.Level %}
                                     style="background-color: {{ norm_color(Score_Entry.Level.Color) }};"
@@ -130,8 +143,6 @@
                                 </option>
                                 {% endfor %}
                             </select>
-                            
-                            <!-- Comment button removed from per-skill cell; moved to final column -->
                         </td>
                         {% endfor %}
                         {% if Evaluat.Show_Optional_Column %}
@@ -144,7 +155,7 @@
                             </select>
                         </td>
                         {% endif %}
-                        <!-- Final column: per-student comments for the whole evaluation -->
+                        <!-- Colonne commentaires par étudiant -->
                         <td class="comment-cell" data-student-id="{{ Studnt_tmp.Id }}" data-evaluat-id="{{ Evaluat.Id }}">
                             {% set Student_Comments = Student_Comments_Dict.get(Studnt_tmp.Id, []) %}
                             <div class="comment-section">
@@ -154,7 +165,63 @@
                             </div>
                         </td>
                     </tr>
+{%- endmacro %}
+
+                {# ── Vue plate (défaut) ────────────────────────────── #}
+                <tbody id="tbody-flat">
+                    {% for Studnt_tmp in Studnts %}
+                    {{ render_studnt_row(Studnt_tmp) }}
                     {% endfor %}
+                </tbody>
+
+                {# ── Vue groupée (sous-groupes) ────────────────────── #}
+                {% set _total_cols = Skills|length + 2 + (1 if Evaluat.Show_Optional_Column else 0) %}
+                <tbody id="tbody-grouped" style="display:none">
+                    {% set ns = namespace(seen_ids=[]) %}
+
+                    {# Parcours des sous-groupes #}
+                    {% for grp in Evaluat_Grps %}
+                    {# ── Ligne séparatrice du groupe ── #}
+                    <tr class="grp-separator-row">
+                        <td colspan="{{ _total_cols }}"><span class="grp-separator-name">{{ grp.Name }}</span></td>
+                    </tr>
+                    {# Étudiants du groupe #}
+                    {% for member in grp.Members %}
+                    {% set st = member.Studnt %}
+                    {% if st %}
+                        {% if st.Id in ns.seen_ids %}
+                        {# Doublon : ligne grisée non-interactive #}
+                        <tr class="grp-dup-row">
+                            <td class="grp-dup-cell" colspan="{{ _total_cols }}">
+                                <div class="grp-dup-info">
+                                    <span class="grp-dup-icon">&#x21A5;</span>
+                                    <span class="grp-dup-name">{{ st.Name }}</span>
+                                    <span class="grp-dup-badge">déjà dans un groupe précédent</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        {% set ns.seen_ids = ns.seen_ids + [st.Id] %}
+                        {{ render_studnt_row(st) }}
+                        {% endif %}
+                    {% endif %}
+                    {% endfor %}
+                    {% endfor %}
+
+                    {# ── Étudiants sans sous-groupe ── #}
+                    {% set _has_ungrouped = namespace(val=false) %}
+                    {% for st in Studnts %}
+                    {% if st.Id not in Grp_Studnt_Ids %}
+                        {% if not _has_ungrouped.val %}
+                        {% set _has_ungrouped.val = true %}
+                        <tr class="grp-separator-row grp-separator-ungrouped">
+                            <td colspan="{{ _total_cols }}"><span class="grp-separator-name">Sans sous-groupe</span></td>
+                        </tr>
+                        {% endif %}
+                        {{ render_studnt_row(st) }}
+                    {% endif %}
+                    {% endfor %}
+
                 </tbody>
             </table>
         </div>
@@ -451,6 +518,39 @@
                 alert('Erreur réseau lors de la sauvegarde de la note optionnelle');
             });
         }
+
+        // ── Toggle affichage par sous-groupe ──────────────────────────────
+        const GRP_VIEW_KEY = 'grp_view_evaluat_{{ Evaluat.Id }}';
+
+        /**
+         * Bascule entre la vue plate et la vue groupée.
+         * Persiste le choix dans localStorage.
+         */
+        function Eval_Toggle_Group_View(enabled) {
+            const flatBody = document.getElementById('tbody-flat');
+            const grpBody  = document.getElementById('tbody-grouped');
+            if (!flatBody || !grpBody) return;
+            if (enabled) {
+                flatBody.style.display = 'none';
+                grpBody.style.display  = '';
+            } else {
+                flatBody.style.display = '';
+                grpBody.style.display  = 'none';
+            }
+            localStorage.setItem(GRP_VIEW_KEY, enabled ? '1' : '0');
+        }
+
+        // Restauration de l'état au chargement de la page
+        document.addEventListener('DOMContentLoaded', function () {
+            const saved = localStorage.getItem(GRP_VIEW_KEY);
+            if (saved === '1') {
+                const cb = document.getElementById('grpViewToggle');
+                if (cb) {
+                    cb.checked = true;
+                    Eval_Toggle_Group_View(true);
+                }
+            }
+        });
     </script>
     <script>
         // Hide student name when photo is missing (broken or placeholder)

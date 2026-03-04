@@ -8,7 +8,7 @@ import os
 from flask import Flask, render_template, request, jsonify, send_file
 import re
 from sqlalchemy import nullslast
-from Data_Models import Db, Level, Skill, Studnt, Evaluat, Score, Comment, Note, EvaluatNote, Saison
+from Data_Models import Db, Level, Skill, Studnt, Evaluat, Score, Comment, Note, EvaluatNote, Saison, EvaluatGrp
 from admin import admin_bp
 import csv
 import io
@@ -155,7 +155,15 @@ def App_Main_Dashboard():
     All_Evaluat_Notes = EvaluatNote.query.filter_by(Evaluat_Id=Current_Evaluat.Id).all()
     for en in All_Evaluat_Notes:
         Student_Notes_Dict[en.Studnt_Id] = en.Note_Id
-    
+
+    # Load sous-groupes for this evaluation (sorted by name for consistent display)
+    Evaluat_Grps = EvaluatGrp.query.filter_by(Evaluat_Id=Current_Evaluat.Id).order_by(EvaluatGrp.Name).all()
+    # Build set of student IDs that appear in at least one sous-groupe
+    Grp_Studnt_Ids = set()
+    for _grp in Evaluat_Grps:
+        for _m in _grp.Members:
+            Grp_Studnt_Ids.add(_m.Studnt_Id)
+
     return render_template(
         'Eval_Dash.html',
         Evaluat=Current_Evaluat,
@@ -170,6 +178,8 @@ def App_Main_Dashboard():
         Comments_Dict=Comments_Dict,
         Student_Comments_Dict=Student_Comments_Dict,
         Student_Notes_Dict=Student_Notes_Dict,
+        Evaluat_Grps=Evaluat_Grps,
+        Grp_Studnt_Ids=Grp_Studnt_Ids,
         norm_color=norm_color
     )
 

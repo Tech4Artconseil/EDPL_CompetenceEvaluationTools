@@ -118,7 +118,9 @@ Ce dépôt fournit : interface de saisie, API AJAX, import/export CSV/XLSX, gest
 - Gestion des commentaires par étudiant / compétence (API pour lister/ajouter)
 - Gestion de `Note` (valeurs numériques) et affectation par étudiant pour une colonne optionnelle
 - Import d'étudiants et de compétences : CSV (aperçu + confirmation), extraction depuis HTML ou URL (heuristiques de matching noms/images/emails)
-- Administration CRUD (ressources : skills, studnts, evaluats, levels, notes, mapping_types, sheet_mappings)
+- Administration CRUD (ressources : skills, studnts, evaluats, levels, notes, mapping_types, sheet_mappings, saisons, evaluat_grps)
+- **Gestion des saisons** : regroupement des évaluations par année/période académique avec filtre dans le tableau de bord
+- **Sous-groupes d'évaluation** : découpage libre des étudiants d'une évaluation en sous-groupes nommés, affichés en vue groupée dans la grille
 - Remplissage de templates XLSX et génération de feuilles par étudiant (dry-run disponible) via `sheets_local.py`
 - Export CSV (séparateur `;`) et export XLSX coloré (nécessite `openpyxl`)
 - Scripts utilitaires dans `scripts/` (migrations, contrôles, etc.)
@@ -169,6 +171,69 @@ Par défaut : http://localhost:5000
 - Exporter : `Export CSV` (séparateur `;`) ou `Export XLSX` (couleurs requièrent `openpyxl`)
 - Importer : via l'admin → Import (CSV / HTML / URL) — utiliser l'aperçu puis confirmer l'import
 - Remplir templates XLSX : depuis l'admin ou le tableau de bord, preview puis génération
+- Filtrer par saison : cliquer sur un bouton de la barre de saisons dans le tableau de bord
+- Afficher les sous-groupes : basculer le toggle « Vue groupée » dans la grille d'évaluation
+
+## Saisons
+
+Les **saisons** permettent de regrouper les évaluations par période académique (ex. `2024-2025`, `2025-2026`).
+
+### Modèle
+
+- Table `saisons` : `Id`, `Name` (unique, ex. `2025-2026`), `Descrip` (optionnel)
+- `Evaluat.Saison_Id` : clé étrangère nullable vers `saisons.Id`
+- La propriété `Evaluat.Saison` retourne directement le nom de la saison (raccourci lecture seule)
+
+### Interface
+
+- **Barre de filtre** : en haut du tableau de bord, des boutons permettent de restreindre la liste des évaluations à une saison spécifique (ou « Toutes »).
+- **Panneau latéral** : les évaluations sont regroupées visuellement par saison, avec un en-tête de séparation.
+- **Admin** : gérer les saisons via `/admin/saisons` (CRUD standard). Associer une saison à une évaluation dans le formulaire d'édition de l'évaluation.
+
+### Migration
+
+Si la base existante ne possède pas encore la table `saisons` :
+
+```bash
+python scripts/migrate_add_saison_table.py
+```
+
+Ce script crée la table `saisons`, ajoute la colonne `Saison_Id` sur `evaluats`, et migre automatiquement les valeurs textuelles `Saison` déjà renseignées.
+
+## Sous-groupes d'évaluation (EvaluatGrp)
+
+Les **sous-groupes** permettent de diviser librement les étudiants d'une même évaluation en groupes nommés (ex. `Groupe TD A`, `Oral 1`, `Passage matin`…). Un étudiant peut appartenir à plusieurs sous-groupes.
+
+### Modèles
+
+- `EvaluatGrp` (table `evaluat_grps`) : `Id`, `Name`, `Evaluat_Id`, `CreatedAt`
+- `EvaluatGrpMember` (table `evaluat_grp_members`) : `EvaluatGrp_Id`, `Studnt_Id`
+- La suppression d'un `EvaluatGrp` entraîne la suppression en cascade de ses `EvaluatGrpMember`.
+- La suppression d'une `Evaluat` entraîne la suppression en cascade de ses `EvaluatGrp` (et donc de leurs membres).
+
+### Interface
+
+- **Vue groupée** : dans la grille d'évaluation, un bouton « Vue groupée » bascule l'affichage. En mode groupé, les lignes sont organisées sous des séparateurs portant le nom de chaque sous-groupe. Les étudiants présents dans plusieurs sous-groupes sont affichés une fois de façon interactive puis en doublon grisé dans les groupes suivants. Les étudiants n'appartenant à aucun sous-groupe apparaissent dans une section « Non affectés ».
+- **Lien rapide** : un bouton « Sous-groupes » dans la barre d'outils du tableau de bord ouvre directement `/admin/evaluat_grps?evaluat_id=<id>` pour l'évaluation courante.
+
+### Administration
+
+Accessible via `/admin/evaluat_grps` :
+
+- **Liste** : filtrée par évaluation (paramètre `?evaluat_id=`)
+- **Créer** : `/admin/evaluat_grps/create` — choisir une évaluation (filtrée par saison), puis sélectionner les membres (Ctrl+Clic)
+- **Modifier** : `/admin/evaluat_grps/<id>/edit`
+- **Supprimer** : bouton dans la liste, suppression cascade des membres
+
+Le formulaire de création/édition propose un filtre par saison pour restreindre dynamiquement la liste des évaluations disponibles (chargement AJAX).
+
+### Migration
+
+Si la base existante ne possède pas encore les tables `evaluat_grps` / `evaluat_grp_members` :
+
+```bash
+python scripts/migrate_add_evaluat_grps.py
+```
 
 ## Import CSV — format attendu (étudiants avec photo Data-URI ou URI)
 
@@ -233,11 +298,15 @@ EDPL_CompetenceEvaluationTools/
 
 Les tables principales implémentées dans `Data_Models.py` :
 
+- `Saison` (saisons académiques : Name unique, Descrip optionnel)
 - `Level` (niveaux, pourcentage, couleur, description)
 - `Skill` (compétence : SkillSet_Id, Code, Descrip)
-- `StudntGrp` (groupes d'étudiants)
- - `Studnt` (étudiants : Name, Email, Photo_Url, Group_Id)
-- `Evaluat` (séances d'évaluation : Group_Id, SkillSet_Id, Sheet_Local_Path...)
+- `SkillSet` (groupe de compétences)
+- `StudntGrp` (groupes de classe d'étudiants)
+- `Studnt` (étudiants : Name, Email, Photo_Url, Group_Id)
+- `Evaluat` (séances d'évaluation : Group_Id, SkillSet_Id, Saison_Id, Sheet_Local_Path, Show_Optional_Column)
+- `EvaluatGrp` (sous-groupes nommés d'une évaluation : Name, Evaluat_Id)
+- `EvaluatGrpMember` (membre d'un sous-groupe : EvaluatGrp_Id, Studnt_Id)
 - `Score` (ligne par étudiant × compétence pour une évaluation)
 - `Comment` (commentaires)
 - `Note` (valeurs numériques utilisables pour une colonne optionnelle)
@@ -258,7 +327,10 @@ Ces paquets figurent dans `requirements.txt` mais peuvent être facultatifs selo
 
 - `check_db.py` : affichage des tables SQLite
 - `check_evaluat_scores.py` : vérifie que le nombre d'entrées `scores` correspond à `students × skills` pour une évaluation
-- `scripts/` : migrations et outils d'administration supplémentaires
+- `scripts/migrate_add_saison_table.py` : crée la table `saisons`, ajoute `Saison_Id` sur `evaluats` et migre les valeurs textuelles existantes
+- `scripts/migrate_add_saison.py` : migration antérieure (ajout de la colonne texte `Saison` sur `evaluats`, remplacée par `Saison_Id`)
+- `scripts/migrate_add_evaluat_grps.py` : crée les tables `evaluat_grps` et `evaluat_grp_members`
+- `scripts/` : autres migrations et outils d'administration
 
 ## Conventions de nommage
 
@@ -271,10 +343,3 @@ GNU GENERAL PUBLIC LICENSE — voir le fichier `LICENSE`.
 ## Support
 
 Ouvrez une issue sur le dépôt pour signaler un bug ou demander une fonctionnalité.
-
----
-
-Si vous voulez, je peux :
-- corriger `Data_Models.py` pour autoriser `Comment.Skill_Id = NULL` (ou)
-- modifier le code pour toujours fournir une valeur `Skill_Id` aux commentaires.
-Dites-moi quelle option vous préférez et j'appliquerai le changement.

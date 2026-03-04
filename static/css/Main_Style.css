@@ -563,3 +563,155 @@ body {
         width: 24%;
     }
 }
+
+/* ================================================================
+   GROUP VIEW MODE — affichage par sous-groupe dans le tableau
+   ----------------------------------------------------------------
+   Tous les tokens de personnalisation sont regroupés ici.
+   Modifiez ces valeurs pour ajuster facilement la présentation.
+   ================================================================ */
+
+/* ── Tokens de personnalisation (variables CSS) ──────────────────
+   Changez ces valeurs pour ajuster l'apparence globale du mode groupe.
+   ---------------------------------------------------------------- */
+:root {
+    /* Séparateur de groupe principal */
+    --grp-sep-bg:           #2c3e50;   /* fond de la ligne séparatrice           */
+    --grp-sep-color:        #ffffff;   /* texte de la ligne séparatrice          */
+    --grp-sep-border:       #1a252f;   /* bordure de la ligne séparatrice        */
+    --grp-sep-font-size:    13px;      /* taille du texte                        */
+    --grp-sep-padding:      10px 14px; /* espacement interne                     */
+    --grp-sep-letter-space: 0.06em;    /* écartement des lettres                 */
+
+    /* Séparateur "Sans sous-groupe" */
+    --grp-sep-ung-bg:       #95a5a6;   /* fond atténué pour les non-groupés      */
+    --grp-sep-ung-border:   #7f8c8d;
+
+    /* Ligne dupliquée (étudiant dans plusieurs groupes) */
+    --grp-dup-row-bg:       #f4f4f4;   /* fond grisé                             */
+    --grp-dup-row-border:   #e0e0e0;
+    --grp-dup-name-color:   #aaa;      /* couleur du nom grisé                   */
+    --grp-dup-name-size:    13px;
+    --grp-dup-badge-bg:     #ebebeb;
+    --grp-dup-badge-color:  #bbb;
+    --grp-dup-badge-border: #d0d0d0;
+    --grp-dup-row-height:   32px;      /* hauteur compacte de la ligne doublon   */
+
+    /* En-tête Student avec checkbox */
+    --grp-toggle-font-size: 11px;
+    --grp-toggle-color:     #cfd8e0;   /* couleur du label sur fond sombre       */
+    --grp-toggle-color-hover: #ffffff;
+}
+
+/* ── Ligne séparatrice de groupe ────────────────────────────────── */
+.grp-separator-row td {
+    background-color: var(--grp-sep-bg);
+    color: var(--grp-sep-color);
+    font-weight: bold;
+    font-size: var(--grp-sep-font-size);
+    padding: var(--grp-sep-padding);
+    border: 2px solid var(--grp-sep-border);
+    letter-spacing: var(--grp-sep-letter-space);
+    text-transform: uppercase;
+    /* ne pas hériter du sticky de .student-cell */
+    position: static;
+}
+
+.grp-separator-row.grp-separator-ungrouped td {
+    background-color: var(--grp-sep-ung-bg);
+    border-color: var(--grp-sep-ung-border);
+}
+
+.grp-separator-name {
+    display: inline-block;
+    padding: 0 4px;
+}
+
+/* ── Ligne dupliquée ────────────────────────────────────────────── */
+.grp-dup-row {
+    height: var(--grp-dup-row-height);
+}
+
+.grp-dup-row td {
+    background-color: var(--grp-dup-row-bg);
+    border: 1px solid var(--grp-dup-row-border);
+    padding: 4px 12px;
+    position: static;              /* désactive le sticky de student-cell */
+}
+
+.grp-dup-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.grp-dup-icon {
+    color: var(--grp-dup-badge-color);
+    font-size: 14px;
+    line-height: 1;
+}
+
+.grp-dup-name {
+    font-size: var(--grp-dup-name-size);
+    color: var(--grp-dup-name-color);
+    font-style: italic;
+}
+
+.grp-dup-badge {
+    font-size: 11px;
+    color: var(--grp-dup-badge-color);
+    background-color: var(--grp-dup-badge-bg);
+    border: 1px solid var(--grp-dup-badge-border);
+    border-radius: 10px;
+    padding: 1px 8px;
+    white-space: nowrap;
+}
+
+/* ── En-tête Student : wrapper avec checkbox ────────────────────── */
+.student-header-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start;
+}
+
+.grp-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--grp-toggle-font-size);
+    font-weight: normal;
+    color: var(--grp-toggle-color);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    margin-top: 2px;
+}
+
+.grp-toggle-label input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    accent-color: #3498db;
+    flex-shrink: 0;
+}
+
+.grp-toggle-label:hover {
+    color: var(--grp-toggle-color-hover);
+}
+
+/* ── Bouton commentaire par ligne (btn-comment-row) ─────────────── */
+.btn-comment-row {
+    padding: 4px 8px;
+    background-color: #95a5a6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s;
+}
+
+.btn-comment-row:hover {
+    background-color: #7f8c8d;
+}
