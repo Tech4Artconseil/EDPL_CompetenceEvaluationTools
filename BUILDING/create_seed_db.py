@@ -35,7 +35,7 @@ os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 if os.path.exists(OUTPUT_PATH):
     os.remove(OUTPUT_PATH)
 
-print(f'→ Génération de la BDD seed : {OUTPUT_PATH}')
+print(f'>> Generation de la BDD seed : {OUTPUT_PATH}')
 
 conn = sqlite3.connect(OUTPUT_PATH)
 cur = conn.cursor()
@@ -163,7 +163,7 @@ for stmt in SCHEMA_SQL.split(';'):
     if stmt:
         cur.execute(stmt)
 conn.commit()
-print('  ✔ Schéma créé')
+print('  [OK] Schema cree')
 
 # ---------------------------------------------------------------------------
 # 1. Levels — 4 niveaux (LevelSet_Id=1)
@@ -178,7 +178,7 @@ cur.executemany(
     'INSERT INTO levels (LevelSet_Id, Percent, Descrip, Color) VALUES (?,?,?,?)',
     _LEVELS
 )
-print(f'  ✔ {len(_LEVELS)} niveaux insérés')
+print(f'  [OK] {len(_LEVELS)} niveaux inseres')
 
 # ---------------------------------------------------------------------------
 # 2. Notes — échelle 0-20
@@ -198,7 +198,7 @@ _NOTES_DESCRIP = {
 }
 _NOTES = [(v, _NOTES_DESCRIP.get(v)) for v in range(21)]
 cur.executemany('INSERT INTO notes (Valeure, Descript) VALUES (?,?)', _NOTES)
-print(f'  ✔ {len(_NOTES)} notes insérées')
+print(f'  [OK] {len(_NOTES)} notes inserees')
 
 # ---------------------------------------------------------------------------
 # 3. SkillSets + Skills
@@ -225,14 +225,14 @@ _SKILLS_SS2 = [
 ]
 cur.executemany('INSERT INTO skills (SkillSet_Id, Code, Descrip) VALUES (?,?,?)', _SKILLS_SS1)
 cur.executemany('INSERT INTO skills (SkillSet_Id, Code, Descrip) VALUES (?,?,?)', _SKILLS_SS2)
-print(f'  ✔ {len(_SKILLS_SS1)+len(_SKILLS_SS2)} compétences insérées (2 SkillSets)')
+print(f'  [OK] {len(_SKILLS_SS1)+len(_SKILLS_SS2)} competences inserees (2 SkillSets)')
 
 # ---------------------------------------------------------------------------
 # 4. Saison test
 # ---------------------------------------------------------------------------
 cur.execute("INSERT INTO saisons (Name, Descrip) VALUES ('Test', 'Saison de démonstration')")
 saison_id = cur.lastrowid   # = 1
-print(f'  ✔ Saison "Test" insérée (Id={saison_id})')
+print(f'  [OK] Saison "Test" inseree (Id={saison_id})')
 
 # ---------------------------------------------------------------------------
 # 5. Groupe et étudiants de démo
@@ -254,7 +254,7 @@ for name, email, photo in _STUDENTS:
         (name, email, photo, grp_id)
     )
 student_ids = list(range(1, len(_STUDENTS) + 1))
-print(f'  ✔ {len(_STUDENTS)} étudiants dans "Groupe_Demo"')
+print(f'  [OK] {len(_STUDENTS)} etudiants dans "Groupe_Demo"')
 
 # ---------------------------------------------------------------------------
 # 6. Évaluation de démo (SkillSet DNMADE3_18.3, Saison Test)
@@ -264,7 +264,7 @@ cur.execute("""
     VALUES ('Demo_Evaluation', ?, 1, 1, ?, 'None', ?)
 """, (grp_id, datetime.now(timezone.utc).isoformat(), saison_id))
 evaluat_id = cur.lastrowid
-print(f'  ✔ Évaluation "Demo_Evaluation" créée (Id={evaluat_id})')
+print(f'  [OK] Evaluation "Demo_Evaluation" creee (Id={evaluat_id})')
 
 # ---------------------------------------------------------------------------
 # 7. Scores de démo (quelques niveaux pré-remplis pour illustrer le tableau)
@@ -281,8 +281,8 @@ for s_idx, stud_id in enumerate(student_ids):
             (evaluat_id, stud_id, skill_id, lvl)
         )
 score_count = len(student_ids) * 9
-print(f'  ✔ {score_count} scores de démo insérés')
+print(f'  [OK] {score_count} scores de demo inseres')
 
 conn.commit()
 conn.close()
-print(f'\n✅ BDD seed générée avec succès : {OUTPUT_PATH}')
+print(f'\n[OK] BDD seed generee avec succes : {OUTPUT_PATH}')
