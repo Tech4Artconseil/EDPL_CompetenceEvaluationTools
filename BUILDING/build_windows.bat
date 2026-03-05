@@ -182,6 +182,29 @@ IF %ERRORLEVEL% NEQ 0 (
     echo     BDD seed copiée : instance\evaluat.db
 )
 
+:: --- Nettoyage du dossier trombi : conserver uniquement les images de démo ---
+echo Nettoyage du dossier trombi (images de demo uniquement)...
+set "TROMBI_DIR=%DIST_DIR%\_internal\static\uploads\trombi"
+IF EXIST "%TROMBI_DIR%" (
+    set "TROMBI_REMOVED=0"
+    for %%f in ("%TROMBI_DIR%\*") do (
+        set "KEEP="
+        if /i "%%~nxf"=="DUPONT_Alice.png"   set "KEEP=1"
+        if /i "%%~nxf"=="MARTIN_Thomas.png"  set "KEEP=1"
+        if /i "%%~nxf"=="BERNARD_Lea.png"    set "KEEP=1"
+        if /i "%%~nxf"=="MOREAU_Julien.jpg"  set "KEEP=1"
+        if /i "%%~nxf"=="PETIT_Emma.jpg"     set "KEEP=1"
+        if not defined KEEP (
+            del /f /q "%%f"
+            set /a TROMBI_REMOVED+=1
+            echo     Supprime : %%~nxf
+        )
+    )
+    echo     Trombi nettoye : !TROMBI_REMOVED! image^(s^) supprimee^(s^).
+) ELSE (
+    echo     AVERTISSEMENT : dossier trombi introuvable dans la distribution.
+)
+
 for /f "tokens=1-3 delims=/ " %%a in ('date /t') do set "BDATE=%%a/%%b/%%c"
 for /f "tokens=1-2 delims=: " %%a in ('time /t') do set "BTIME=%%a:%%b"
 >> "%BUILDING_DIR%\build_log.txt" echo [%BDATE% %BTIME%] %FULL% - Windows - OK - %DIST_DIR%

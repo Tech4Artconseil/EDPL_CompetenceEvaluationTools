@@ -2,3 +2,5 @@
 [05/03/2026 09:02] v1.0-b002_20260305 - Windows - OK - C:\Travail\DEV\Devdivers\EDPL_CompetenceEvaluationTools\EDPL_CompetenceEvaluationTools\BUILDING\dist\EDPL_EvaluationTool
 [05/03/2026 09:12] v1.0-b003_20260305 - Windows - OK - C:\Travail\DEV\Devdivers\EDPL_CompetenceEvaluationTools\EDPL_CompetenceEvaluationTools\BUILDING\dist\EDPL_EvaluationTool
 [05/03/2026 09:36] v1.0-b004_20260305 - Windows - OK - C:\Travail\DEV\Devdivers\EDPL_CompetenceEvaluationTools\EDPL_CompetenceEvaluationTools\BUILDING\dist\EDPL_EvaluationTool
+[05/03/2026 10:04] v1.0-b006_20260305 - Windows - OK - C:\Travail\DEV\Devdivers\EDPL_CompetenceEvaluationTools\EDPL_CompetenceEvaluationTools\BUILDING\dist\EDPL_EvaluationTool
+[05/03/2026 10:07] v1.0-b007_20260305 - Windows - OK - C:\Travail\DEV\Devdivers\EDPL_CompetenceEvaluationTools\EDPL_CompetenceEvaluationTools\BUILDING\dist\EDPL_EvaluationTool
