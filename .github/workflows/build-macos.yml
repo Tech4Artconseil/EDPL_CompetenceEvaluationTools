@@ -46,7 +46,8 @@ jobs:
 
       # ------------------------------------------------------------------
       # 4. Compilation via build_mac.sh
-      #    Le script gère : version, seed DB, nettoyage trombi
+      #    Le script gère uniquement PyInstaller + version.
+      #    Seed DB et trombi sont gérés explicitement ci-après.
       #    Sortie : BUILDING/dist/EDPL_EvaluationTool/
       # ------------------------------------------------------------------
       - name: Build macOS app
@@ -55,7 +56,46 @@ jobs:
           bash BUILDING/build_mac.sh
 
       # ------------------------------------------------------------------
-      # 5. Reconstitution du nom de version (après incrément par le script)
+      # 5. Génération de la BDD seed (étape explicite — échec = build KO)
+      #    create_seed_db.py est autonome (stdlib uniquement, pas d'imports app)
+      # ------------------------------------------------------------------
+      - name: Generate seed DB
+        run: |
+          DIST_DIR="BUILDING/dist/EDPL_EvaluationTool"
+          mkdir -p "${DIST_DIR}/instance"
+          python BUILDING/create_seed_db.py "${DIST_DIR}/instance/evaluat.db"
+          echo "Vérification de la BDD seed..."
+          test -f "${DIST_DIR}/instance/evaluat.db" || { echo "ERREUR : evaluat.db absent !"; exit 1; }
+          echo "  OK : ${DIST_DIR}/instance/evaluat.db créée."
+
+      # ------------------------------------------------------------------
+      # 6. Nettoyage trombi — garder uniquement les 5 images de démo
+      #    (Les images démo sont embarquées par PyInstaller via static/)
+      # ------------------------------------------------------------------
+      - name: Cleanup trombi
+        run: |
+          TROMBI_DIR="BUILDING/dist/EDPL_EvaluationTool/_internal/static/uploads/trombi"
+          DEMO_IMAGES="DUPONT_Alice.png MARTIN_Thomas.png BERNARD_Lea.png MOREAU_Julien.jpg PETIT_Emma.jpg"
+          if [ -d "$TROMBI_DIR" ]; then
+            REMOVED=0
+            for f in "$TROMBI_DIR"/*; do
+              fname=$(basename "$f")
+              keep=0
+              for demo in $DEMO_IMAGES; do
+                [ "$fname" = "$demo" ] && keep=1 && break
+              done
+              if [ $keep -eq 0 ]; then
+                rm -f "$f"
+                REMOVED=$((REMOVED + 1))
+              fi
+            done
+            echo "Trombi : $REMOVED image(s) supprimée(s), 5 images démo conservées."
+          else
+            echo "AVERTISSEMENT : dossier trombi introuvable — PyInstaller n'a peut-être pas embarqué static/."
+          fi
+
+      # ------------------------------------------------------------------
+      # 7. Reconstitution du nom de version (après incrément par le script)
       #    VERSION.txt  → "1.0"   →  BASE=1.0
       #    build_counter.txt → ex: "7" → PADDED=007
       #    → ver = v1.0-b007_20260305
@@ -72,7 +112,7 @@ jobs:
           echo "Version calculée : ${VER}"
 
       # ------------------------------------------------------------------
-      # 6. Création du ZIP
+      # 8. Création du ZIP
       # ------------------------------------------------------------------
       - name: Zip distribution
         run: |
@@ -82,7 +122,7 @@ jobs:
           echo "Archive créée : ${ZIP_NAME}"
 
       # ------------------------------------------------------------------
-      # 7. Upload de l'artefact (conservé 30 jours)
+      # 9. Upload de l'artefact (conservé 30 jours)
       # ------------------------------------------------------------------
       - name: Upload artifact
         uses: actions/upload-artifact@v4

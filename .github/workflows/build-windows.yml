@@ -46,7 +46,8 @@ jobs:
 
       # ------------------------------------------------------------------
       # 4. Compilation via build_windows.bat
-      #    Le script gère : version, seed DB, nettoyage trombi
+      #    Le script gère uniquement PyInstaller + version.
+      #    Seed DB et trombi sont gérés explicitement ci-après.
       #    Sortie : BUILDING\dist\EDPL_EvaluationTool\
       # ------------------------------------------------------------------
       - name: Build Windows app
@@ -54,7 +55,45 @@ jobs:
           cmd /c BUILDING\build_windows.bat
 
       # ------------------------------------------------------------------
-      # 5. Reconstitution du nom de version (après incrément par le script)
+      # 5. Génération de la BDD seed (étape explicite — échec = build KO)
+      #    create_seed_db.py est autonome (stdlib uniquement, pas d'imports app)
+      # ------------------------------------------------------------------
+      - name: Generate seed DB
+        shell: pwsh
+        run: |
+          $distDir = "BUILDING\dist\EDPL_EvaluationTool"
+          New-Item -ItemType Directory -Force -Path "$distDir\instance" | Out-Null
+          python BUILDING\create_seed_db.py "$distDir\instance\evaluat.db"
+          if ($LASTEXITCODE -ne 0) { Write-Error "ERREUR : create_seed_db.py a échoué."; exit 1 }
+          if (-not (Test-Path "$distDir\instance\evaluat.db")) {
+            Write-Error "ERREUR : evaluat.db absent après génération !"; exit 1
+          }
+          Write-Host "  OK : $distDir\instance\evaluat.db créée."
+
+      # ------------------------------------------------------------------
+      # 6. Nettoyage trombi — garder uniquement les 5 images de démo
+      #    (Les images démo sont embarquées par PyInstaller via static/)
+      # ------------------------------------------------------------------
+      - name: Cleanup trombi
+        shell: pwsh
+        run: |
+          $trombiDir = "BUILDING\dist\EDPL_EvaluationTool\_internal\static\uploads\trombi"
+          $demoImages = @("DUPONT_Alice.png","MARTIN_Thomas.png","BERNARD_Lea.png","MOREAU_Julien.jpg","PETIT_Emma.jpg")
+          if (Test-Path $trombiDir) {
+            $removed = 0
+            Get-ChildItem -Path $trombiDir -File | ForEach-Object {
+              if ($demoImages -notcontains $_.Name) {
+                Remove-Item $_.FullName -Force
+                $removed++
+              }
+            }
+            Write-Host "Trombi : $removed image(s) supprimée(s), 5 images démo conservées."
+          } else {
+            Write-Warning "Dossier trombi introuvable — PyInstaller n'a peut-être pas embarqué static/."
+          }
+
+      # ------------------------------------------------------------------
+      # 7. Reconstitution du nom de version (après incrément par le script)
       #    VERSION.txt  → "1.0"   →  BASE=1.0
       #    build_counter.txt → ex: "7" → PADDED=007
       #    → ver = v1.0-b007_20260305
@@ -72,7 +111,7 @@ jobs:
           Write-Host "Version calculée : $ver"
 
       # ------------------------------------------------------------------
-      # 6. Création du ZIP
+      # 8. Création du ZIP
       # ------------------------------------------------------------------
       - name: Zip distribution
         shell: pwsh
@@ -82,7 +121,7 @@ jobs:
           Write-Host "Archive créée : $zipName"
 
       # ------------------------------------------------------------------
-      # 7. Upload de l'artefact (conservé 30 jours)
+      # 9. Upload de l'artefact (conservé 30 jours)
       # ------------------------------------------------------------------
       - name: Upload artifact
         uses: actions/upload-artifact@v4
