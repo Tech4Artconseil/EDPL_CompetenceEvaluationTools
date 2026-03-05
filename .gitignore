@@ -65,6 +65,14 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Trombi upload images (keep only sample/placeholder images)
+static/uploads/trombi/*
+!static/uploads/trombi/MARTIN_Thomas.png
+!static/uploads/trombi/MOREAU_Julien.jpg
+!static/uploads/trombi/PETIT_Emma.jpg
+!static/uploads/trombi/BERNARD_Lea.png
+!static/uploads/trombi/DUPONT_Alice.png
+
 # Scrapy stuff:
 .scrapy
 
@@ -205,3 +213,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
