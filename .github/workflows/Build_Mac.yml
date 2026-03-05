@@ -1,0 +1,94 @@
+# =============================================================================
+# build-macos.yml — Build PyInstaller macOS via GitHub Actions
+# =============================================================================
+# Déclenché sur :
+#   - push sur main/master touchant le code de l'app
+#   - déclenchement manuel (onglet "Actions" → "Run workflow")
+#
+# Artefact produit : EDPL_EvaluationTool_vX.Y-bNNN_YYYYMMDD_macOS.zip
+#   → téléchargeable dans l'onglet "Actions" → run → "Artifacts"
+# =============================================================================
+
+name: Build macOS
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'EDPL_CompetenceEvaluationTools/**'
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      # ------------------------------------------------------------------
+      # 1. Checkout du dépôt
+      # ------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # 2. Python 3.11 — SQLAlchemy 2.0.x est incompatible avec Python 3.14+
+      # ------------------------------------------------------------------
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ------------------------------------------------------------------
+      # 3. Installation des dépendances (requirements.txt)
+      #    PyInstaller est installé par build_mac.sh lui-même (étape 3/6)
+      # ------------------------------------------------------------------
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r EDPL_CompetenceEvaluationTools/requirements.txt
+
+      # ------------------------------------------------------------------
+      # 4. Compilation via build_mac.sh
+      #    Le script gère : version, PyInstaller, seed DB, nettoyage trombi
+      #    Sortie : EDPL_CompetenceEvaluationTools/BUILDING/dist/EDPL_EvaluationTool/
+      # ------------------------------------------------------------------
+      - name: Build macOS app
+        run: |
+          chmod +x EDPL_CompetenceEvaluationTools/BUILDING/build_mac.sh
+          bash EDPL_CompetenceEvaluationTools/BUILDING/build_mac.sh
+
+      # ------------------------------------------------------------------
+      # 5. Reconstitution du nom de version (après incrément par le script)
+      #    VERSION.txt  → "1.0"   →  BASE=1.0
+      #    build_counter.txt → ex: "7" → PADDED=007
+      #    → ver = v1.0-b007_20260305
+      # ------------------------------------------------------------------
+      - name: Compute version string
+        id: version
+        run: |
+          BASE=$(cat EDPL_CompetenceEvaluationTools/BUILDING/VERSION.txt | tr -d '[:space:]')
+          CNT=$(cat EDPL_CompetenceEvaluationTools/BUILDING/build_counter.txt | tr -d '[:space:]')
+          PADDED=$(printf '%03d' "$CNT")
+          BUILD_DATE=$(date '+%Y%m%d')
+          VER="v${BASE}-b${PADDED}_${BUILD_DATE}"
+          echo "ver=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Version calculée : ${VER}"
+
+      # ------------------------------------------------------------------
+      # 6. Création du ZIP (à la racine du dépôt pour l'upload)
+      # ------------------------------------------------------------------
+      - name: Zip distribution
+        run: |
+          ZIP_NAME="EDPL_EvaluationTool_${{ steps.version.outputs.ver }}_macOS.zip"
+          cd EDPL_CompetenceEvaluationTools/BUILDING/dist
+          zip -r "../../../${ZIP_NAME}" EDPL_EvaluationTool/
+          echo "Archive créée : ${ZIP_NAME}"
+
+      # ------------------------------------------------------------------
+      # 7. Upload de l'artefact (conservé 30 jours)
+      # ------------------------------------------------------------------
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EDPL_EvaluationTool_${{ steps.version.outputs.ver }}_macOS
+          path: EDPL_EvaluationTool_${{ steps.version.outputs.ver }}_macOS.zip
+          retention-days: 30
