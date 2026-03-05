@@ -38,35 +38,49 @@ echo "Dossier build : $BUILDING_DIR"
 echo ""
 
 # --- Activation du venv si présent ---
+# Ordre de priorité : .venv311 (Python 3.11) avant .venv (Python 3.14+)
+# SQLAlchemy 2.0.x est INCOMPATIBLE avec Python 3.14 — .venv311 obligatoire.
 echo "[1/6] Activation de l'environnement Python..."
-if [ -f ".venv311/bin/activate" ]; then
-    source .venv311/bin/activate
-    echo "    venv: .venv311"
-elif [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
-    echo "    venv: .venv"
+VENV_ACTIVATE=""
+
+# Priorité 1 : .venv311 dans le dossier PARENT
+if [ -f "$(dirname "$PROJECT_ROOT")/.venv311/bin/activate" ]; then
+    VENV_ACTIVATE="$(dirname "$PROJECT_ROOT")/.venv311/bin/activate"
+    echo "    Trouvé : .venv311 (dossier parent)"
+# Priorité 2 : .venv311 dans la racine projet
+elif [ -f "$PROJECT_ROOT/.venv311/bin/activate" ]; then
+    VENV_ACTIVATE="$PROJECT_ROOT/.venv311/bin/activate"
+    echo "    Trouvé : .venv311 (racine projet)"
+# Priorité 3 : .venv dans le dossier PARENT  [ATTENTION : peut être Python 3.14]
+elif [ -f "$(dirname "$PROJECT_ROOT")/.venv/bin/activate" ]; then
+    VENV_ACTIVATE="$(dirname "$PROJECT_ROOT")/.venv/bin/activate"
+    echo "    AVERTISSEMENT : utilisation de .venv (vérifiez que Python est < 3.14)"
+# Priorité 4 : .venv dans la racine projet
+elif [ -f "$PROJECT_ROOT/.venv/bin/activate" ]; then
+    VENV_ACTIVATE="$PROJECT_ROOT/.venv/bin/activate"
+    echo "    AVERTISSEMENT : utilisation de .venv (vérifiez que Python est < 3.14)"
 else
-    echo "    Aucun venv trouvé, utilisation du Python global."
+    echo "    Aucun venv trouvé — utilisation du Python courant."
+    echo "    ATTENTION : SQLAlchemy nécessite Python 3.11 ou 3.12 maximum."
 fi
 
-# --- Calcul de la version (via Python) ---
-echo "[2/6] Calcul de la version..."
-VERSION_INFO=$(python3 - <<'PYEOF'
-import pathlib, datetime, sys
-d = pathlib.Path("BUILDING")
-base = (d / "VERSION.txt").read_text().strip()
-cnt_f = d / "build_counter.txt"
-cnt = int(cnt_f.read_text().strip()) + 1
-cnt_f.write_text(str(cnt))
-ver = f"v{base}-b{cnt:03d}"
-date = datetime.date.today().strftime("%Y%m%d")
-full = f"{ver}_{date}"
-print(f"{ver}|{full}")
-PYEOF
-)
+if [ -n "$VENV_ACTIVATE" ]; then
+    source "$VENV_ACTIVATE" || { echo "[ERREUR] Echec de l'activation du venv : $VENV_ACTIVATE"; exit 1; }
+fi
 
-VER=$(echo "$VERSION_INFO" | cut -d'|' -f1)
-FULL=$(echo "$VERSION_INFO" | cut -d'|' -f2)
+echo "    Python actif :"
+python3 --version || { echo "[ERREUR] Python introuvable après activation."; exit 1; }
+
+# --- Calcul de la version (via _build_version.py, identique à Windows) ---
+echo "[2/6] Calcul de la version..."
+python3 "$BUILDING_DIR/_build_version.py" "$BUILDING_DIR" > "$BUILDING_DIR/_ver_tmp.txt" || { echo "[ERREUR] Echec du calcul de version."; exit 1; }
+while IFS='=' read -r key value; do
+    case "$key" in
+        VER)  VER="$value" ;;
+        FULL) FULL="$value" ;;
+    esac
+done < "$BUILDING_DIR/_ver_tmp.txt"
+rm -f "$BUILDING_DIR/_ver_tmp.txt"
 
 echo "    Version : $VER"
 echo "    Build   : $FULL"
@@ -104,6 +118,43 @@ VEOF
 # Copier le guide de distribution dans le dist si disponible
 if [ -f "$BUILDING_DIR/GUIDE_DISTRIBUTION.md" ]; then
     cp "$BUILDING_DIR/GUIDE_DISTRIBUTION.md" "$DIST_DIR/GUIDE_DISTRIBUTION.md"
+fi
+
+# --- Génération et copie de la BDD seed (données de démo) ---
+echo "Génération de la BDD seed..."
+SEED_DB_TARGET="$DIST_DIR/instance/evaluat.db"
+mkdir -p "$DIST_DIR/instance"
+python3 "$BUILDING_DIR/create_seed_db.py" "$SEED_DB_TARGET"
+if [ $? -ne 0 ]; then
+    echo "    [AVERTISSEMENT] La génération de la BDD seed a échoué. La distribution démarrera sans données."
+else
+    echo "    BDD seed copiée : instance/evaluat.db"
+fi
+
+# --- Nettoyage du dossier trombi : conserver uniquement les images de démo ---
+echo "Nettoyage du dossier trombi (images de demo uniquement)..."
+TROMBI_DIR="$DIST_DIR/_internal/static/uploads/trombi"
+DEMO_IMAGES="DUPONT_Alice.png MARTIN_Thomas.png BERNARD_Lea.png MOREAU_Julien.jpg PETIT_Emma.jpg"
+if [ -d "$TROMBI_DIR" ]; then
+    TROMBI_REMOVED=0
+    for f in "$TROMBI_DIR"/*; do
+        fname=$(basename "$f")
+        keep=0
+        for demo in $DEMO_IMAGES; do
+            if [ "$fname" = "$demo" ]; then
+                keep=1
+                break
+            fi
+        done
+        if [ $keep -eq 0 ]; then
+            rm -f "$f"
+            TROMBI_REMOVED=$((TROMBI_REMOVED + 1))
+            echo "    Supprimé : $fname"
+        fi
+    done
+    echo "    Trombi nettoyé : $TROMBI_REMOVED image(s) supprimée(s)."
+else
+    echo "    AVERTISSEMENT : dossier trombi introuvable dans la distribution."
 fi
 
 # --- Journalisation dans build_log.txt ---
