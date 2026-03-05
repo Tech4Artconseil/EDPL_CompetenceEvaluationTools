@@ -51,12 +51,56 @@ EDPL_EvaluationTool/
 ├── VERSION.txt               ← version du build (informationnel)
 ├── GUIDE_DISTRIBUTION.md     ← ce guide
 ├── _internal/                ← bibliothèques Python (ne pas supprimer)
-├── instance/                 ← BASE DE DONNÉES (créée au premier lancement)
-│   └── evaluat.db            ← données à sauvegarder / transférer
-└── static/
+├── instance/
+│   └── evaluat.db            ← BDD pré-remplie avec données de démo
+└── _internal/static/
     └── uploads/
-        └── trombi/           ← photos étudiants (à sauvegarder / transférer)
+        └── trombi/           ← photos étudiants embarquées par PyInstaller
+            ├── DUPONT_Alice.png
+            ├── MARTIN_Thomas.png
+            ├── BERNARD_Lea.png
+            ├── MOREAU_Julien.jpg
+            └── PETIT_Emma.jpg
 ```
+
+> **Note :** Les photos trombi sont embarquées dans `_internal/` par PyInstaller (fichiers extraits
+> au lancement depuis le bundle). Le dossier `static/uploads/trombi/` visible à l'utilisateur est
+> celui situé **à côté de l'exécutable** et sert à stocker les photos importées après déploiement.
+
+### BDD seed et données de démo
+
+Le script `BUILDING/create_seed_db.py` génère automatiquement la base de données de démo
+à chaque build. Il est appelé par `build_windows.bat` à l'étape `[6/6] Finalisation`.
+
+**Contenu de la BDD seed :**
+
+| Table | Données incluses |
+|---|---|
+| `saisons` | 1 saison : **"Test"** |
+| `skill_sets` | 2 référentiels : **DNMADE3_18.3** (9 compétences) et **CUSTM_Eval_Set_1** (4 compétences) |
+| `levels` | 4 niveaux : MI (rouge), MF (orange), MS (vert), TBM (vert foncé) |
+| `notes` | Échelle 0–20 (21 valeurs) |
+| `studnt_grps` | 1 groupe : **Groupe_Demo** |
+| `studnts` | 5 étudiants fictifs avec photos trombi associées |
+| `evaluats` | 1 évaluation : **Demo_Evaluation** (grille pré-remplie) |
+| `scores` | 45 scores de démo (5 étudiants × 9 compétences) |
+
+**Étudiants de démo et leurs photos :**
+
+| Nom | Email | Photo |
+|---|---|---|
+| DUPONT Alice | alice.dupont@demo.local | `DUPONT_Alice.png` |
+| MARTIN Thomas | thomas.martin@demo.local | `MARTIN_Thomas.png` |
+| BERNARD Léa | lea.bernard@demo.local | `BERNARD_Lea.png` |
+| MOREAU Julien | julien.moreau@demo.local | `MOREAU_Julien.jpg` |
+| PETIT Emma | emma.petit@demo.local | `PETIT_Emma.jpg` |
+
+Pour modifier les données de démo (ajouter des étudiants, changer les compétences…),
+éditer directement `BUILDING/create_seed_db.py` puis relancer le build.
+
+> **Comportement si une BDD existe déjà :** au démarrage, `Db.create_all()` crée uniquement les
+> tables manquantes — aucune donnée existante n'est écrasée. La seed n'est copiée qu'à l'issue
+> du build ; une installation déjà utilisée conserve ses propres données.
 
 **Nommer le ZIP avec la version** (bonne pratique) :
 - `EDPL_EvaluationTool_v1.0-b003_Windows.zip`
@@ -148,7 +192,10 @@ Pour copier vos données d'un ordinateur à un autre **sans perte** :
 | Élément | Chemin | Contenu |
 |---|---|---|
 | Base de données | `EDPL_EvaluationTool/instance/evaluat.db` | Toutes les évaluations, étudiants, scores, commentaires |
-| Photos étudiants | `EDPL_EvaluationTool/static/uploads/trombi/` | Images des étudiants |
+| Photos importées | `EDPL_EvaluationTool/static/uploads/trombi/` | Photos ajoutées **après** le déploiement initial |
+
+> Les photos de démo (DUPONT_Alice, MARTIN_Thomas, etc.) sont embarquées dans le bundle
+> PyInstaller (`_internal/`) et n'ont pas besoin d'être copiées manuellement.
 
 ### Procédure de transfert
 
@@ -198,3 +245,8 @@ Pour copier vos données d'un ordinateur à un autre **sans perte** :
 | Port réseau | 5000 (local uniquement, pas accessible depuis Internet) |
 | Aucun accès Internet requis | L'application fonctionne entièrement hors-ligne |
 | Données | Stockées localement, jamais envoyées à l'extérieur |
+| BDD seed | Générée par `BUILDING/create_seed_db.py` à chaque build |
+| Initialisation tables | `Db.create_all()` au démarrage — tables manquantes créées automatiquement |
+| Photos de démo | Embarquées dans le bundle PyInstaller (`static/uploads/trombi/`) |
+| Photos utilisateur | Stockées dans `instance/../static/uploads/trombi/` à côté de l'exécutable |
+| Référentiels inclus | `DNMADE3_18.3` (9 compétences) · `CUSTM_Eval_Set_1` (4 compétences) |

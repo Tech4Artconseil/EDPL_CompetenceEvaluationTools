@@ -648,6 +648,10 @@ def App_Main_Export_XLSX():
 
 
 if __name__ == '__main__':
+    # Créer les tables si elles n'existent pas encore (première utilisation sur une nouvelle machine)
+    with App.app_context():
+        Db.create_all()
+
     if getattr(sys, 'frozen', False):
         # ---- Mode application empaquetée (PyInstaller) ----
         # Ouvrir automatiquement le navigateur après démarrage du serveur

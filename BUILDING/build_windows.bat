@@ -171,6 +171,17 @@ IF EXIST "%BUILDING_DIR%\GUIDE_DISTRIBUTION.md" (
     copy /y "%BUILDING_DIR%\GUIDE_DISTRIBUTION.md" "%DIST_DIR%\GUIDE_DISTRIBUTION.md" >nul
 )
 
+:: --- Génération et copie de la BDD seed (données de démo) ---
+echo Génération de la BDD seed...
+set "SEED_DB_TARGET=%DIST_DIR%\instance\evaluat.db"
+if not exist "%DIST_DIR%\instance" mkdir "%DIST_DIR%\instance"
+python "%BUILDING_DIR%\create_seed_db.py" "%SEED_DB_TARGET%"
+IF %ERRORLEVEL% NEQ 0 (
+    echo [AVERTISSEMENT] La génération de la BDD seed a échoué. La distribution démarrera sans données.
+) ELSE (
+    echo     BDD seed copiée : instance\evaluat.db
+)
+
 for /f "tokens=1-3 delims=/ " %%a in ('date /t') do set "BDATE=%%a/%%b/%%c"
 for /f "tokens=1-2 delims=: " %%a in ('time /t') do set "BTIME=%%a:%%b"
 >> "%BUILDING_DIR%\build_log.txt" echo [%BDATE% %BTIME%] %FULL% - Windows - OK - %DIST_DIR%
