@@ -63,9 +63,10 @@ EDPL_EvaluationTool/
             └── PETIT_Emma.jpg
 ```
 
-> **Note :** Les photos trombi sont embarquées dans `_internal/` par PyInstaller (fichiers extraits
-> au lancement depuis le bundle). Le dossier `static/uploads/trombi/` visible à l'utilisateur est
-> celui situé **à côté de l'exécutable** et sert à stocker les photos importées après déploiement.
+> **Note :** Les photos trombi (démo **et** photos importées après déploiement) sont stockées dans
+> `_internal/static/uploads/trombi/`. L'application sauvegarde les nouvelles photos importées dans ce
+> même dossier (chemin calculé par rapport au code embarqué, pas à côté de l'exécutable).
+> Il n'y a **pas** de dossier `static/` à côté de l'exécutable.
 
 ### BDD seed et données de démo
 
@@ -192,22 +193,23 @@ Pour copier vos données d'un ordinateur à un autre **sans perte** :
 | Élément | Chemin | Contenu |
 |---|---|---|
 | Base de données | `EDPL_EvaluationTool/instance/evaluat.db` | Toutes les évaluations, étudiants, scores, commentaires |
-| Photos importées | `EDPL_EvaluationTool/static/uploads/trombi/` | Photos ajoutées **après** le déploiement initial |
+| Photos importées | `EDPL_EvaluationTool/_internal/static/uploads/trombi/` | Photos ajoutées **après** le déploiement initial |
 
-> Les photos de démo (DUPONT_Alice, MARTIN_Thomas, etc.) sont embarquées dans le bundle
-> PyInstaller (`_internal/`) et n'ont pas besoin d'être copiées manuellement.
+> Les photos de démo (DUPONT_Alice, MARTIN_Thomas, etc.) sont également dans
+> `_internal/static/uploads/trombi/` ; elles sont fournies avec le package et n'ont pas besoin
+> d'être copiées manuellement.
 
 ### Procédure de transfert
 
 **Sur le poste SOURCE (l'ancien ordinateur) :**
 1. Fermer l'application
 2. Copier le fichier `instance/evaluat.db`
-3. Copier tout le dossier `static/uploads/trombi/`
+3. Copier tout le dossier `_internal/static/uploads/trombi/`
 
 **Sur le poste DESTINATION (le nouvel ordinateur) :**
 1. Installer l'application (décompresser le ZIP)
 2. **Avant** le premier lancement, coller le fichier `evaluat.db` dans le dossier `instance/`
-3. Coller les photos dans `static/uploads/trombi/`
+3. Coller les photos dans `_internal/static/uploads/trombi/`
 4. Lancer l'application — toutes les données sont restaurées
 
 > **Conseil :** Sauvegardez régulièrement le fichier `evaluat.db`
@@ -247,6 +249,6 @@ Pour copier vos données d'un ordinateur à un autre **sans perte** :
 | Données | Stockées localement, jamais envoyées à l'extérieur |
 | BDD seed | Générée par `BUILDING/create_seed_db.py` à chaque build |
 | Initialisation tables | `Db.create_all()` au démarrage — tables manquantes créées automatiquement |
-| Photos de démo | Embarquées dans le bundle PyInstaller (`static/uploads/trombi/`) |
-| Photos utilisateur | Stockées dans `instance/../static/uploads/trombi/` à côté de l'exécutable |
+| Photos de démo | Embarquées dans le bundle PyInstaller (`_internal/static/uploads/trombi/`) |
+| Photos utilisateur | Stockées dans `_internal/static/uploads/trombi/` (à l'intérieur du bundle) |
 | Référentiels inclus | `DNMADE3_18.3` (9 compétences) · `CUSTM_Eval_Set_1` (4 compétences) |

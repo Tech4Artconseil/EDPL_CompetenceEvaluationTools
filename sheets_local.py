@@ -462,6 +462,30 @@ def fill_student_sheets(evaluat_id: int = None, dry_run: bool = False, overwrite
                 actions.append({'sheet': sheet_name, 'status': 'student_not_found', 'name': student_name})
                 continue
 
+            # Overall comment (cell B56): use the most recent *general* comment
+            # (Skill_Id IS NULL) for this student in this evaluation.
+            latest_comment = (
+                Comment.query
+                .filter_by(Evaluat_Id=evaluat_id, Studnt_Id=stud.Id, Skill_Id=None)
+                .order_by(Comment.CreatedAt.desc())
+                .first()
+            )
+            if latest_comment and latest_comment.Text and str(latest_comment.Text).strip():
+                comment_cell = ws['B56']
+                existing_comment = comment_cell.value
+                comment_writable = (existing_comment is None) or (str(existing_comment).strip() in ('', '0'))
+                if comment_writable:
+                    actions.append({'sheet': sheet_name, 'cell': 'B56', 'student': stud.Name,
+                                    'status': 'comment_written', 'text': latest_comment.Text})
+                    if not dry_run:
+                        comment_cell.value = latest_comment.Text
+                else:
+                    actions.append({'sheet': sheet_name, 'cell': 'B56', 'student': stud.Name,
+                                    'status': 'comment_skipped_nonempty', 'value': existing_comment})
+            else:
+                actions.append({'sheet': sheet_name, 'cell': 'B56', 'student': stud.Name,
+                                'status': 'no_general_comment'})
+
             for row in range(6, 49):
                 try:
                     code_val = ws_data[f'A{row}'].value
